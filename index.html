@@ -107,6 +107,13 @@ input,select{font:inherit;color:var(--text)}
 .img-viewer.open{opacity:1;pointer-events:auto}
 .img-viewer img{max-width:95vw;max-height:85vh;border-radius:8px;object-fit:contain}
 .img-viewer .img-close{position:absolute;top:16px;right:16px;color:#fff;font-size:30px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.15);border-radius:50%}
+.csv-stats{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.csv-stat{flex:1;min-width:70px;padding:10px 8px;border-radius:var(--radius-sm);text-align:center}
+.csv-stat .num{font-size:22px;font-weight:800;font-family:"DIN Alternate",system-ui}
+.csv-stat .label{font-size:11px;color:var(--text2);margin-top:2px}
+.csv-stat.exp{border:2px solid var(--primary);color:var(--primary)}
+.csv-stat.inc{border:2px solid var(--green);color:var(--green)}
+.csv-stat.skip{border:2px solid var(--text3);color:var(--text3)}
 
 /* ==================== 报表页 ==================== */
 .report-period{display:flex;justify-content:center;gap:8px;margin-bottom:16px}
@@ -265,6 +272,9 @@ input,select{font:inherit;color:var(--text)}
         <div class="setting-item" onclick="importData()">
           导入数据<span class="arrow">›</span>
         </div>
+        <div class="setting-item" onclick="importAlipayCSV()">
+          导入支付宝 CSV<span class="arrow">›</span>
+        </div>
       </div>
       <div class="setting-group">
         <div class="setting-item danger" onclick="clearAllData()">
@@ -309,6 +319,7 @@ input,select{font:inherit;color:var(--text)}
   </div>
 </div>
 
+<input type="file" id="fileAlipay" accept=".csv" style="display:none" onchange="handleAlipayCSV(event)">
 <!-- Hidden file input -->
 <input type="file" id="fileImport" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="fileImage" accept="image/*" capture="environment" style="display:none" onchange="handleImagePicked(event)">
@@ -317,6 +328,23 @@ input,select{font:inherit;color:var(--text)}
 <div class="img-viewer" id="imgViewer" onclick="closeImageViewer()">
   <span class="img-close">✕</span>
   <img id="imgViewerImg" src="" alt="" onclick="event.stopPropagation()">
+</div>
+
+<!-- Alipay CSV Import Modal -->
+<div class="modal-bg" id="csvModal" onclick="if(event.target===this)closeCsvModal()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">导入支付宝 CSV</div>
+    <div style="text-align:center;margin-bottom:12px" id="csvSummary"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px" id="csvStats"></div>
+    <div style="font-size:12px;color:var(--text2);text-align:center;margin-bottom:12px">
+      来源标记：支付宝 · 追加模式（不覆盖现有数据）
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeCsvModal()" style="flex:1;height:42px;border-radius:8px;background:var(--border);font-size:14px;font-weight:600">取消</button>
+      <button onclick="doImportAlipay()" style="flex:1;height:42px;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;font-weight:600">确认导入</button>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -343,16 +371,24 @@ let reportPeriod = 'month';
 let catEditorType = 'expense';
 let trendChart = null;
 let pendingImage = null; // 待保存的图片 Blob
+let pendingAlipayRows = null; // CSV 解析后待导入的数据
 
 // ==================== IndexedDB ====================
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('MoneyKeeper', 1);
+    const req = indexedDB.open('MoneyKeeper', 2);
     req.onupgradeneeded = e => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('transactions')) {
         const store = db.createObjectStore('transactions', { keyPath: 'id' });
         store.createIndex('yearMonth', 'yearMonth');
+        store.createIndex('alipayOrderNo', 'alipayOrderNo');
+      } else {
+        // v1→v2: 新增支付宝订单号索引
+        const store = e.target.transaction.objectStore('transactions');
+        if (!store.indexNames.contains('alipayOrderNo')) {
+          store.createIndex('alipayOrderNo', 'alipayOrderNo');
+        }
       }
     };
     req.onsuccess = e => resolve(e.target.result);
@@ -974,6 +1010,130 @@ async function viewImage(txId) {
 function closeImageViewer() {
   document.getElementById('imgViewer').classList.remove('open');
   document.getElementById('imgViewerImg').src = '';
+}
+
+// ==================== 支付宝CSV导入 ====================
+const ALIPAY_CAT_MAP = {
+  '餐饮美食': '餐饮',
+  '水果': '水果',
+  '交通出行': '出行', '公共交通': '出行',
+  '住房物业': '住房',
+  '通讯快递': '快递',
+  '文化休闲': '娱乐', '运动户外': '娱乐',
+  '教育培训': '学习',
+  '日用百货': '日用', '生活服务': '日用', '便民服务': '日用',
+  '医疗健康': '医疗',
+  '服饰装扮': '服饰',
+  '充值缴费': '通讯',
+};
+
+function mapAlipayCategory(alipayCat) {
+  return ALIPAY_CAT_MAP[alipayCat] || '其他';
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { result.push(current.trim()); current = ''; }
+      else { current += ch; }
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+async function dbGetAllAlipayOrderNos() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('transactions', 'readonly');
+    const req = t.objectStore('transactions').index('alipayOrderNo').getAllKeys();
+    req.onsuccess = () => resolve(new Set(req.result.filter(Boolean)));
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+function importAlipayCSV() {
+  document.getElementById('fileAlipay').click();
+}
+
+async function handleAlipayCSV(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const lines = text.split('
+');
+    let dataStart = 0;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith('交易时间')) { dataStart = i + 1; break; }
+    }
+    if (!dataStart) throw new Error('未找到CSV表头，请确认是支付宝导出的账单文件');
+    const existingNos = await dbGetAllAlipayOrderNos();
+    const rows = [];
+    let skipCount = 0, dupCount = 0;
+    for (let i = dataStart; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const cols = parseCSVLine(line);
+      if (cols.length < 7) continue;
+      const [time, alipayCat, , , desc, inout, amountStr, , status, orderNo] = cols;
+      if (inout === '不计收支') { skipCount++; continue; }
+      if (status === '交易关闭' || status === '退款成功') { skipCount++; continue; }
+      const amount = parseFloat(amountStr);
+      if (!amount || amount <= 0) { skipCount++; continue; }
+      if (orderNo && existingNos.has(orderNo)) { dupCount++; continue; }
+      const type = inout === '收入' ? 'income' : 'expense';
+      rows.push({
+        id: 'alipay_' + orderNo || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+        type,
+        amount,
+        category: mapAlipayCategory(alipayCat),
+        note: desc.slice(0, 100),
+        date: time.substring(0, 10),
+        yearMonth: time.substring(0, 7),
+        createdAt: Date.now(),
+        alipayOrderNo: orderNo || '',
+      });
+    }
+    pendingAlipayRows = rows;
+    const expenseCount = rows.filter(r => r.type === 'expense').length;
+    const incomeCount = rows.filter(r => r.type === 'income').length;
+    document.getElementById('csvSummary').textContent = `共解析 ${lines.length - dataStart} 条，可导入 ${rows.length} 条`;
+    document.getElementById('csvStats').innerHTML = `
+      <div class="csv-stat exp"><div class="num">${expenseCount}</div><div class="label">支出</div></div>
+      <div class="csv-stat inc"><div class="num">${incomeCount}</div><div class="label">收入</div></div>
+      <div class="csv-stat skip"><div class="num">${skipCount + dupCount}</div><div class="label">跳过</div></div>`;
+    document.getElementById('csvModal').classList.add('open');
+  } catch(err) {
+    alert('导入失败：' + err.message + '
+请确认文件是支付宝导出的CSV账单，编码为UTF-8');
+  }
+  e.target.value = '';
+}
+
+async function doImportAlipay() {
+  if (!pendingAlipayRows || !pendingAlipayRows.length) return;
+  const rows = pendingAlipayRows;
+  pendingAlipayRows = null;
+  closeCsvModal();
+  for (const tx of rows) {
+    await dbAdd(tx);
+  }
+  backupToOPFS();
+  alert(`成功导入 ${rows.length} 条记录`);
+  renderTxList();
+}
+
+function closeCsvModal() {
+  document.getElementById('csvModal').classList.remove('open');
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
