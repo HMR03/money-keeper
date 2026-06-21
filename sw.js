@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moneykeeper-v5'; // 改代码后请升级版本号 v6, v7, ... 否则手机不更新
+const CACHE_NAME = 'moneykeeper-v6'; // 改代码后请升级版本号 v7, v8, ... 否则手机不更新
 const ASSETS = [
   './',
   './index.html',
