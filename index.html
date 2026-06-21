@@ -84,8 +84,10 @@ input,select{font:inherit;color:var(--text)}
 .add-fields{padding:0 16px;margin-bottom:8px}
 .add-field{display:flex;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
 .add-field label{font-size:13px;color:var(--text2);width:50px;flex-shrink:0}
-.add-field input{flex:1;border:none;outline:none;font-size:14px;background:none}
-.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border)}
+.add-field input{flex:1;border:none;outline:none;font-size:14px;background:none;height:36px}
+.add-field input[type="date"]::-webkit-calendar-picker-indicator{width:28px;height:28px;cursor:pointer;opacity:.5}
+#page-add{padding-bottom:calc(80px + var(--safe-b))}
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-bottom:calc(80px + var(--safe-b))}
 .numpad button{background:var(--card);padding:14px;font-size:20px;font-weight:600;transition:background .1s}
 .numpad button:active{background:#E8E8E8}
 .numpad .save-btn{grid-column:1/-1;background:var(--primary);color:#fff;padding:14px;font-size:16px}
