@@ -67,6 +67,22 @@ input,select{font:inherit;color:var(--text)}
 .empty-state{text-align:center;padding:60px 20px;color:var(--text3);font-size:14px;line-height:1.8}
 .empty-state .icon{font-size:48px;margin-bottom:8px;opacity:.5}
 
+
+/* ==================== 筛选栏 ==================== */
+.filter-bar{margin-bottom:12px}
+.filter-search{position:relative;margin-bottom:8px}
+.filter-search input{width:100%;height:36px;border:none;border-radius:10px;background:var(--card);padding:0 12px 0 36px;font-size:13px;outline:none}
+.filter-search input:focus{box-shadow:0 0 0 2px var(--primary)}
+.filter-search .s-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:15px;color:var(--text3);pointer-events:none}
+.filter-search .s-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--text3);cursor:pointer;padding:2px 4px;display:none}
+.tag-scroll{display:flex;gap:6px;overflow-x:auto;padding:2px 0;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tag-scroll::-webkit-scrollbar{display:none}
+.tag-pill{flex-shrink:0;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;background:var(--card);color:var(--text2);transition:all .15s;white-space:nowrap}
+.tag-pill:active{transform:scale(.95)}
+.tag-pill.active{background:var(--primary);color:#fff}
+.filter-hint{font-size:11px;color:var(--text2);text-align:center;padding:4px 0;display:none}
+.filter-hint.show{display:block}
+
 /* ==================== 记一笔 ==================== */
 .add-header{display:flex;align-items:center;padding:12px 16px}
 .add-header .back{font-size:24px;color:var(--text2);padding:4px 8px}
@@ -179,6 +195,16 @@ input,select{font:inherit;color:var(--text)}
           <span>结余 <b id="sumBalance">0.00</b></span>
         </div>
       </div>
+      <!-- 筛选栏 -->
+      <div class="filter-bar">
+        <div class="filter-search">
+          <span class="s-icon">🔍</span>
+          <input type="text" id="filterInput" placeholder="搜索备注或分类..." oninput="onFilterInput()">
+          <span class="s-clear" id="filterClear" onclick="clearFilter()">✕</span>
+        </div>
+        <div class="tag-scroll" id="tagScroll"></div>
+      </div>
+      <div class="filter-hint" id="filterHint"></div>
       <div id="txList"></div>
     </div>
   </div>
@@ -372,6 +398,8 @@ let catEditorType = 'expense';
 let trendChart = null;
 let pendingImage = null; // 待保存的图片 Blob
 let pendingAlipayRows = null; // CSV 解析后待导入的数据
+let filterQuery = '';
+let filterCat = null; // 当前选中的分类筛选
 
 // ==================== IndexedDB ====================
 function openDB() {
@@ -614,8 +642,38 @@ async function saveTx() {
 	}
 
 // ==================== 流水列表 ====================
+
+
+
+// ==================== 筛选功能 ====================
+let filterDebounce = null;
+function onFilterInput() {
+  clearTimeout(filterDebounce);
+  filterDebounce = setTimeout(() => {
+    filterQuery = document.getElementById('filterInput').value.trim().toLowerCase();
+    document.getElementById('filterClear').style.display = filterQuery ? 'block' : 'none';
+    renderTxList();
+  }, 200);
+}
+
+function clearFilter() {
+  document.getElementById('filterInput').value = '';
+  document.getElementById('filterClear').style.display = 'none';
+  filterQuery = '';
+  renderTxList();
+}
+
+function toggleCatFilter(cat) {
+  filterCat = (filterCat === cat) ? null : cat;
+  renderTxList();
+}
+
 function changeMonth(delta) {
   currentMonth.setMonth(currentMonth.getMonth() + delta);
+  filterQuery = '';
+  filterCat = null;
+  document.getElementById('filterInput').value = '';
+  document.getElementById('filterClear').style.display = 'none';
   renderTxList();
 }
 
@@ -624,9 +682,41 @@ async function renderTxList() {
   const m = currentMonth.getMonth();
   document.getElementById('monthLabel').textContent = `${y}年${m + 1}月`;
 
-  const txs = await dbGetByMonth(y, m);
-  txs.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  const allTxs = await dbGetByMonth(y, m);
+  allTxs.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 
+  // 渲染分类标签栏（基于本月所有数据，不受筛选影响）
+  const usedCats = [...new Set(allTxs.map(t => t.category))].filter(Boolean);
+  const tagScroll = document.getElementById('tagScroll');
+  if (usedCats.length > 0) {
+    tagScroll.innerHTML = usedCats.map(cat =>
+      `<button class="tag-pill ${filterCat===cat?'active':''}" onclick="toggleCatFilter('${cat}')">${cat}</button>`
+    ).join('');
+  } else {
+    tagScroll.innerHTML = '';
+  }
+
+  // 应用筛选
+  const txs = allTxs.filter(t => {
+    if (filterCat && t.category !== filterCat) return false;
+    if (filterQuery) {
+      const q = filterQuery;
+      if (!(t.category||'').toLowerCase().includes(q) && !(t.note||'').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  // 筛选提示
+  const hint = document.getElementById('filterHint');
+  const isFiltering = filterQuery || filterCat;
+  if (isFiltering && allTxs.length > 0) {
+    hint.textContent = `筛选结果：${txs.length} 条 / 共 ${allTxs.length} 条`;
+    hint.className = 'filter-hint show';
+  } else {
+    hint.className = 'filter-hint';
+  }
+
+  // 汇总（基于筛选后的数据）
   let totalExpense = 0, totalIncome = 0;
   txs.forEach(t => {
     if (t.type === 'expense') totalExpense += t.amount;
@@ -639,7 +729,8 @@ async function renderTxList() {
 
   const container = document.getElementById('txList');
   if (!txs.length) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">📝</div>这个月还没有记录<br>点击 ＋ 开始记账</div>';
+    const msg = isFiltering ? '没有匹配的记录' : '这个月还没有记录<br>点击 ＋ 开始记账';
+    container.innerHTML = '<div class="empty-state"><div class="icon">' + (isFiltering ? '🔍' : '📝') + '</div>' + msg + '</div>';
     return;
   }
 
