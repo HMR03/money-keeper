@@ -96,6 +96,18 @@ input,select{font:inherit;color:var(--text)}
 .numpad .delete-btn{grid-column:span 1;background:var(--red);color:#fff;padding:14px;font-size:14px}
 .numpad .delete-btn:active{background:#C0392B}
 
+/* Image feature */
+.img-btn{display:flex;align-items:center;gap:6px;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer;padding:4px 0}
+.img-btn .emoji{font-size:18px}
+.img-thumb-preview{display:flex;align-items:center;gap:8px;margin-left:50px;margin-top:6px}
+.img-thumb-preview img{width:48px;height:48px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
+.img-thumb-preview .img-remove{font-size:12px;color:var(--red);cursor:pointer}
+.tx-img-badge{font-size:11px;cursor:pointer;opacity:.6;flex-shrink:0;margin-left:4px}
+.img-viewer{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:300;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.img-viewer.open{opacity:1;pointer-events:auto}
+.img-viewer img{max-width:95vw;max-height:85vh;border-radius:8px;object-fit:contain}
+.img-viewer .img-close{position:absolute;top:16px;right:16px;color:#fff;font-size:30px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.15);border-radius:50%}
+
 /* ==================== 报表页 ==================== */
 .report-period{display:flex;justify-content:center;gap:8px;margin-bottom:16px}
 .report-period button{padding:6px 18px;border-radius:20px;font-size:13px;font-weight:600;background:var(--card);color:var(--text2)}
@@ -185,6 +197,14 @@ input,select{font:inherit;color:var(--text)}
       <div class="add-field">
         <label>日期</label>
         <input type="date" id="inputDate">
+      </div>
+      <div class="add-field">
+        <label style="visibility:hidden">图片</label>
+        <span class="img-btn" onclick="pickImage()">📷 拍照/选图</span>
+      </div>
+      <div class="img-thumb-preview" id="imgPreview" style="display:none">
+        <img id="imgThumb" src="" alt="">
+        <span class="img-remove" onclick="removeImage()">✕ 移除</span>
       </div>
     </div>
     <div class="numpad">
@@ -291,6 +311,13 @@ input,select{font:inherit;color:var(--text)}
 
 <!-- Hidden file input -->
 <input type="file" id="fileImport" accept=".json" style="display:none" onchange="handleImport(event)">
+<input type="file" id="fileImage" accept="image/*" capture="environment" style="display:none" onchange="handleImagePicked(event)">
+
+<!-- Image Viewer -->
+<div class="img-viewer" id="imgViewer" onclick="closeImageViewer()">
+  <span class="img-close">✕</span>
+  <img id="imgViewerImg" src="" alt="" onclick="event.stopPropagation()">
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
@@ -315,6 +342,7 @@ let editingTxId = null;
 let reportPeriod = 'month';
 let catEditorType = 'expense';
 let trendChart = null;
+let pendingImage = null; // 待保存的图片 Blob
 
 // ==================== IndexedDB ====================
 function openDB() {
@@ -413,6 +441,9 @@ function openAdd(txId) {
   document.getElementById('inputNote').value = '';
   document.getElementById('inputDate').value = new Date().toISOString().split('T')[0];
   setType('expense');
+	  pendingImage = null;
+	  document.getElementById('imgPreview').style.display = 'none';
+	  document.getElementById('imgThumb').src = '';
 
   if (txId) {
     // Edit mode: load existing transaction
@@ -427,6 +458,12 @@ function openAdd(txId) {
         updateAmountDisplay();
         renderCatGrid();
       }
+	        // 加载已有图片
+	        getImageFromOPFS(txId).then(url => {
+	          document.getElementById('imgThumb').src = url;
+	          document.getElementById('imgPreview').style.display = 'flex';
+	          pendingImage = null; // 保留原图，不覆盖
+	        }).catch(() => {});
     });
     document.getElementById('addTitle').textContent = '编辑';
   } else {
@@ -525,6 +562,14 @@ async function saveTx() {
     createdAt: Date.now()
   };
 
+
+	  // 保存/删除图片
+	  if (pendingImage === 'REMOVED') {
+	    await deleteImageFromOPFS(tx.id);
+	  } else if (pendingImage) {
+	    await saveImageToOPFS(tx.id, pendingImage);
+	  }
+	  pendingImage = null;
   await dbAdd(tx);
   backupToOPFS(); // 静默备份，不阻塞
   closePage();
@@ -534,6 +579,7 @@ async function saveTx() {
 	  if (!editingTxId) return;
 	  if (!confirm('确定要删除这条记录吗？此操作不可恢复。')) return;
 	  await dbDelete(editingTxId);
+	  await deleteImageFromOPFS(editingTxId);
 	  backupToOPFS();
 	  closePage();
 	}
@@ -586,17 +632,28 @@ async function renderTxList() {
     </div>`;
     items.forEach(t => {
       const cat = findCat(t.type, t.category);
-      html += `<div class="tx-item" onclick="openAdd('${t.id}')">
+	      html += `<div class="tx-item" data-txid="${t.id}" onclick="openAdd('${t.id}')">
         <div class="tx-icon ${t.type}">${cat.name[0]}</div>
         <div class="tx-info">
           <div class="tx-cat">${t.category}</div>
           ${t.note ? `<div class="tx-note">${esc(t.note)}</div>` : ''}
         </div>
         <div class="tx-amount ${t.type}">${t.type==='expense'?'-':'+'} ${t.amount.toFixed(2)}</div>
+	        <span class="tx-img-badge" id="imgBadge_${t.id}" style="display:none" onclick="event.stopPropagation();viewImage('${t.id}')">📷</span>
       </div>`;
     });
   }
   container.innerHTML = html;
+
+	  // 异步检查哪些记录有图片
+	  txs.forEach(async (t) => {
+	    try {
+	      const root = await navigator.storage.getDirectory();
+	      const fh = await root.getFileHandle(`img_${t.id}.jpg`);
+	      const badge = document.getElementById(`imgBadge_${t.id}`);
+	      if (badge) badge.style.display = '';
+	    } catch(e) { /* no image */ }
+	  });
 }
 
 // ==================== 报表 ====================
@@ -841,6 +898,83 @@ async function restoreFromOPFS() {
 }
 
 // ==================== 工具 ====================
+
+// ==================== 图片功能 ====================
+async function saveImageToOPFS(txId, blob) {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const fh = await root.getFileHandle(`img_${txId}.jpg`, { create: true });
+    const w = await fh.createWritable();
+    await w.write(blob);
+    await w.close();
+  } catch(e) { /* OPFS not available */ }
+}
+
+async function getImageFromOPFS(txId) {
+  const root = await navigator.storage.getDirectory();
+  const fh = await root.getFileHandle(`img_${txId}.jpg`);
+  const file = await fh.getFile();
+  return URL.createObjectURL(file);
+}
+
+async function deleteImageFromOPFS(txId) {
+  try {
+    const root = await navigator.storage.getDirectory();
+    await root.removeEntry(`img_${txId}.jpg`);
+  } catch(e) { /* file may not exist */ }
+}
+
+function compressImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 800;
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = h * maxW / w; w = maxW; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => resolve(b), 'image/jpeg', 0.7);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function pickImage() {
+  document.getElementById('fileImage').click();
+}
+
+async function handleImagePicked(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const blob = await compressImage(file);
+  pendingImage = blob;
+  const url = URL.createObjectURL(blob);
+  document.getElementById('imgThumb').src = url;
+  document.getElementById('imgPreview').style.display = 'flex';
+  e.target.value = '';
+}
+
+function removeImage() {
+  pendingImage = editingTxId ? 'REMOVED' : null;
+  document.getElementById('imgThumb').src = '';
+  document.getElementById('imgPreview').style.display = 'none';
+}
+
+async function viewImage(txId) {
+  try {
+    const url = await getImageFromOPFS(txId);
+    document.getElementById('imgViewerImg').src = url;
+    document.getElementById('imgViewer').classList.add('open');
+  } catch(e) {}
+}
+
+function closeImageViewer() {
+  document.getElementById('imgViewer').classList.remove('open');
+  document.getElementById('imgViewerImg').src = '';
+}
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ==================== 初始化 ====================
