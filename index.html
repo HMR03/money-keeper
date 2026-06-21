@@ -512,6 +512,7 @@ async function saveTx() {
   };
 
   await dbAdd(tx);
+  backupToOPFS(); // 静默备份，不阻塞
   closePage();
 }
 
@@ -781,11 +782,54 @@ async function clearAllData() {
   renderTxList();
 }
 
+// ==================== OPFS 静默备份 ====================
+const BACKUP_FILE = 'moneykeeper_backup.json';
+
+async function backupToOPFS() {
+  try {
+    const all = await dbGetAll();
+    const data = {
+      version: 1,
+      backupDate: new Date().toISOString(),
+      transactions: all,
+      expenseCategories: getCats('expense'),
+      incomeCategories: getCats('income')
+    };
+    const root = await navigator.storage.getDirectory();
+    const file = await root.getFileHandle(BACKUP_FILE, { create: true });
+    const writable = await file.createWritable();
+    await writable.write(JSON.stringify(data));
+    await writable.close();
+  } catch(e) { /* OPFS not available, silently skip */ }
+}
+
+async function restoreFromOPFS() {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const file = await root.getFileHandle(BACKUP_FILE);
+    const f = await file.getFile();
+    const text = await f.text();
+    const data = JSON.parse(text);
+    if (!data.transactions || !data.transactions.length) return false;
+    for (const tx of data.transactions) await dbAdd(tx);
+    if (data.expenseCategories) saveCats('expense', data.expenseCategories);
+    if (data.incomeCategories) saveCats('income', data.incomeCategories);
+    return true;
+  } catch(e) { return false; }
+}
+
 // ==================== 工具 ====================
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ==================== 初始化 ====================
-renderTxList();
+(async function init() {
+  const all = await dbGetAll();
+  if (!all.length) {
+    const restored = await restoreFromOPFS();
+    if (restored) console.log('数据已从备份恢复');
+  }
+  renderTxList();
+})();
 
 // PWA 注册
 if ('serviceWorker' in navigator) {
