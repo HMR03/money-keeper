@@ -4,7 +4,7 @@
 
 一个纯前端 PWA（渐进式网页应用），可像原生 App 一样安装到手机主屏幕，支持离线使用。
 
-## 功能
+## ✨ 功能
 
 - **记一笔** — 支出/收入，数字键盘，分类选择，备注 & 日期
 - **流水页** — 按月查看，收支汇总，点击条目可编辑
@@ -14,7 +14,7 @@
 - **OPFS 静默备份** — 每记一笔自动在浏览器私密文件区多存一份，IndexedDB 数据丢失时自动恢复
 - **PWA** — 可安装到桌面，离线可用
 
-## 技术栈
+## 🛠 技术栈
 
 | 层 | 方案 |
 |---|---|
@@ -25,13 +25,13 @@
 | 图表 | Chart.js 4.x |
 | 部署 | GitHub Pages |
 
-## 安装到手机
+## 📱 安装到手机
 
 1. Safari/Chrome 打开网址
 2. iOS：点击底部「分享」→「添加到主屏幕」
 3. Android：点击菜单 →「添加到主屏幕」或「安装应用」
 
-## 数据存储
+## 🗄 数据存储
 
 ### 交易记录 → IndexedDB
 
@@ -54,12 +54,21 @@ mk_cats_income   → 收入分类
 
 App 启动时如果检测到 IndexedDB 为空且 OPFS 有备份，自动恢复数据。
 
-## 开发
+## 🚀 开发
 
 ```bash
 # 克隆仓库
 git clone https://github.com/HMR03/money-keeper.git
 cd money-keeper
 
+# 本地预览（任意 HTTP 服务器）
+npx serve .
+# 或
+python -m http.server 8000
+```
 
+浏览器打开 `http://localhost:8000` 即可。
 
+## 📄 许可
+
+MIT License

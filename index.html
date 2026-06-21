@@ -90,9 +90,11 @@ input,select{font:inherit;color:var(--text)}
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-bottom:calc(80px + var(--safe-b))}
 .numpad button{background:var(--card);padding:14px;font-size:20px;font-weight:600;transition:background .1s}
 .numpad button:active{background:#E8E8E8}
-.numpad .save-btn{grid-column:1/-1;background:var(--primary);color:#fff;padding:14px;font-size:16px}
+.numpad .save-btn{grid-column:span 2;background:var(--primary);color:#fff;padding:14px;font-size:16px}
 .numpad .save-btn:active{background:#E55A2B}
 .numpad .save-btn.income-mode{background:var(--green)}
+.numpad .delete-btn{grid-column:span 1;background:var(--red);color:#fff;padding:14px;font-size:14px}
+.numpad .delete-btn:active{background:#C0392B}
 
 /* ==================== 报表页 ==================== */
 .report-period{display:flex;justify-content:center;gap:8px;margin-bottom:16px}
@@ -198,7 +200,8 @@ input,select{font:inherit;color:var(--text)}
       <button onclick="numInput('.')">.</button>
       <button onclick="numInput('0')">0</button>
       <button onclick="numInput('del')">⌫</button>
-      <button class="save-btn" id="saveBtn" onclick="saveTx()">保存</button>
+	      <button class="save-btn delete-btn" id="deleteBtn" onclick="deleteTx()" style="display:none">删除</button>
+	      <button class="save-btn" id="saveBtn" onclick="saveTx()">保存</button>
     </div>
   </div>
 
@@ -433,6 +436,17 @@ function openAdd(txId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-add').classList.add('active');
   document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+
+	// 编辑模式显示删除按钮，新建模式隐藏
+	const delBtn = document.getElementById('deleteBtn');
+	const savBtn = document.getElementById('saveBtn');
+	if (txId) {
+	delBtn.style.display = '';
+	savBtn.style.gridColumn = 'span 2';
+	} else {
+	delBtn.style.display = 'none';
+	savBtn.style.gridColumn = '1/-1';
+	}
   updateAmountDisplay();
   renderCatGrid();
 }
@@ -515,6 +529,14 @@ async function saveTx() {
   backupToOPFS(); // 静默备份，不阻塞
   closePage();
 }
+
+	async function deleteTx() {
+	  if (!editingTxId) return;
+	  if (!confirm('确定要删除这条记录吗？此操作不可恢复。')) return;
+	  await dbDelete(editingTxId);
+	  backupToOPFS();
+	  closePage();
+	}
 
 // ==================== 流水列表 ====================
 function changeMonth(delta) {
