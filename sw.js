@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moneykeeper-v12'; // 改代码后请升级版本号 v13, v14, ... 否则手机不更新
+const CACHE_NAME = 'moneykeeper-v14'; // 改代码后请升级版本号 v15, v16, ... 否则手机不更新
 const ASSETS = [
   './',
   './index.html',
@@ -10,20 +10,21 @@ const ASSETS = [
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
-  self.skipWaiting(); // v11 过渡版本：自动激活，让更新提示条代码生效
+  self.skipWaiting(); // 自动激活，确保所有旧版本都能更新
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-  ));
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => {
+      // 通知所有打开的页面
+      return self.clients.matchAll().then(clients => {
+        clients.forEach(c => c.postMessage('newVersion'));
+      });
+    })
+  );
   self.clients.claim();
-});
-
-self.addEventListener('message', e => {
-  if (e.data === 'skipWaiting') {
-    self.skipWaiting();
-  }
 });
 
 self.addEventListener('fetch', e => {

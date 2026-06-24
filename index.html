@@ -105,11 +105,10 @@ input,select{font:inherit;color:var(--text)}
 .batch-btn.note{background:#EFF6FF;color:#2563EB}
 .batch-btn.del{background:#FEF2F2;color:var(--red)}
 
-/* 更新提示条 */
-.update-banner{position:fixed;top:0;left:0;right:0;z-index:400;background:var(--primary);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;transform:translateY(-100%);transition:transform .3s}
-.update-banner.show{transform:translateY(0)}
-.update-banner .upd-btn{color:#fff;border:1.5px solid rgba(255,255,255,.6);padding:5px 14px;border-radius:6px;font-size:12px;font-weight:600;flex-shrink:0;margin-left:12px}
-.update-banner .upd-btn:active{background:rgba(255,255,255,.2)}
+/* 更新提示条（保留样式，不再使用） */
+/* Toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:500;background:var(--text);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;pointer-events:none;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
 
 /* 批量操作弹窗 */
 .batch-modal{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:250;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -147,6 +146,7 @@ input,select{font:inherit;color:var(--text)}
 .numpad button:active{background:#E8E8E8}
 .numpad .save-btn{grid-column:span 2;background:var(--primary);color:#fff;padding:14px;font-size:16px}
 .numpad .save-btn:active{background:#E55A2B}
+.numpad .save-btn:disabled{background:var(--border);color:var(--text3);pointer-events:none}
 .numpad .save-btn.income-mode{background:var(--green)}
 .numpad .delete-btn{grid-column:span 1;background:var(--red);color:#fff;padding:14px;font-size:14px}
 .numpad .delete-btn:active{background:#C0392B}
@@ -218,6 +218,7 @@ input,select{font:inherit;color:var(--text)}
 <body>
 
 <!-- 更新提示条 -->
+<div class="toast" id="updateToast">✨ 已更新到最新版本</div>
 <div class="update-banner" id="updateBanner">
   <span style="font-size:13px">✨ 发现新版本</span>
   <button class="upd-btn" onclick="doUpdate()">更新</button>
@@ -312,6 +313,11 @@ input,select{font:inherit;color:var(--text)}
   <div id="page-report" class="page">
     <div class="page-pad">
       <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">报表</h2>
+      <div class="month-nav">
+        <button onclick="changeReportMonth(-1)">‹</button>
+        <span id="reportMonthLabel">2026年6月</span>
+        <button onclick="changeReportMonth(1)">›</button>
+      </div>
       <div class="report-period">
         <button class="active" onclick="setReportPeriod('month',this)">月</button>
         <button onclick="setReportPeriod('year',this)">年</button>
@@ -498,7 +504,7 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
-const APP_VERSION = 'v12'; // 升级时同步修改
+const APP_VERSION = 'v14'; // 升级时同步修改
 
 // ==================== 状态 ====================
 let currentMonth = new Date();
@@ -507,6 +513,7 @@ let addAmount = '0';
 let selectedCat = null;
 let editingTxId = null;
 let reportPeriod = 'month';
+let reportMonth = new Date(); // 报表页独立月份导航
 let catEditorType = 'expense';
 let trendChart = null;
 let pendingImage = null; // 待保存的图片 Blob
@@ -716,6 +723,9 @@ function numInput(key) {
 
 function updateAmountDisplay() {
   document.getElementById('amountDisplay').textContent = addAmount;
+  // 金额为 0 时禁用保存按钮
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = parseFloat(addAmount) <= 0;
 }
 
 async function saveTx() {
@@ -752,7 +762,8 @@ async function saveTx() {
 
 	async function deleteTx() {
 	  if (!editingTxId) return;
-	  if (!confirm('确定要删除这条记录吗？此操作不可恢复。')) return;
+	  const info = selectedCat ? `「${selectedCat} -${parseFloat(addAmount).toFixed(2)}」` : '';
+  if (!confirm(`确定删除${info}吗？\n此操作不可恢复。`)) return;
 	  await dbDelete(editingTxId);
 	  await deleteImageFromOPFS(editingTxId);
 	  backupToOPFS();
@@ -1058,7 +1069,7 @@ async function doBatchNote() {
 // -- 批量删除 --
 async function batchDelete() {
   if (!batchSelected.size) { alert('请先勾选记录'); return; }
-  if (!confirm(`确定要删除选中的 ${batchSelected.size} 条记录吗？\n此操作不可恢复。`)) return;
+  if (!confirm(`确定删除选中的 ${batchSelected.size} 条记录吗？\n💡 建议先到「设置 → 导出数据」备份\n此操作不可恢复。`)) return;
   for (const id of batchSelected) {
     await dbDelete(id);
     await deleteImageFromOPFS(id);
@@ -1076,11 +1087,16 @@ function setReportPeriod(p, btn) {
   renderReport();
 }
 
+
+function changeReportMonth(delta) {
+  reportMonth.setMonth(reportMonth.getMonth() + delta);
+  document.getElementById('reportMonthLabel').textContent = `${reportMonth.getFullYear()}年${reportMonth.getMonth() + 1}月`;
+  renderReport();
+}
 async function renderReport() {
   const all = await dbGetAll();
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
+  const y = reportMonth.getFullYear();
+  const m = reportMonth.getMonth();
 
   // 计算汇总
   let filtered;
@@ -1099,7 +1115,7 @@ async function renderReport() {
   document.getElementById('reportIncome').textContent = totalInc.toFixed(2);
   document.getElementById('reportBalance').textContent = (totalInc - totalExp).toFixed(2);
 
-  renderTrendChart(all, now);
+  renderTrendChart(all, reportMonth);
   if (reportPeriod === 'month') {
     renderRankList(all, y, m);
   } else {
@@ -1531,6 +1547,13 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
 
 // ==================== 初始化 ====================
 (async function init() {
+  // 更新后弹出提示
+  if (sessionStorage.getItem('swUpdated')) {
+    sessionStorage.removeItem('swUpdated');
+    const toast = document.getElementById('updateToast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  }
   document.getElementById('appVersion').textContent = APP_VERSION;
   const all = await dbGetAll();
   hasEverData = all.length > 0;
@@ -1541,36 +1564,19 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
   renderTxList();
 })();
 
-// PWA 注册 + 更新提示
-let _swReg = null;
+// PWA 注册 + 自动更新
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    _swReg = reg;
-    // 监听：新 SW 已就绪，等待激活
-    reg.addEventListener('updatefound', () => {
-      const newWorker = reg.installing;
-      newWorker.addEventListener('statechange', () => {
-        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          document.getElementById('updateBanner').classList.add('show');
-        }
-      });
-    });
-    // 检查是否已有等待中的 SW
-    if (reg.waiting && navigator.serviceWorker.controller) {
-      document.getElementById('updateBanner').classList.add('show');
-    }
-  }).catch(() => {});
-
-  // 新 SW 激活后自动刷新
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
+  const doReload = () => {
+    sessionStorage.setItem('swUpdated', '1');
     window.location.reload();
+  };
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data === 'newVersion') doReload();
   });
-}
-
-function doUpdate() {
-  if (_swReg && _swReg.waiting) {
-    _swReg.waiting.postMessage('skipWaiting');
-  }
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    doReload();
+  });
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 </script>
 </body>
