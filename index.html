@@ -370,7 +370,7 @@ input,select{font:inherit;color:var(--text)}
         </div>
       </div>
       <div style="text-align:center;padding:20px;color:var(--text3);font-size:11px">
-        记账本 v1.0 · 零广告 · 数据存在本地<br>
+        记账本 <span id="appVersion"></span> · 零广告 · 数据存在本地<br>
         长按主屏幕图标可卸载
       </div>
     </div>
@@ -498,6 +498,8 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
+const APP_VERSION = 'v10'; // 升级时同步修改
+
 // ==================== 状态 ====================
 let currentMonth = new Date();
 let addType = 'expense';
@@ -512,6 +514,7 @@ let pendingAlipayRows = null; // CSV 解析后待导入的数据
 let filterQuery = '';
 let filterCat = null; // 当前选中的分类筛选
 let batchMode = false;
+let hasEverData = false; // 是否曾有数据（用于区分首次使用）
 let batchSelected = new Set();
 let batchNewCat = null;
 let batchNoteMode = 'replace';
@@ -846,8 +849,13 @@ async function renderTxList() {
 
   const container = document.getElementById('txList');
   if (!txs.length) {
-    const msg = isFiltering ? '没有匹配的记录' : '这个月还没有记录<br>点击 ＋ 开始记账';
-    container.innerHTML = '<div class="empty-state"><div class="icon">' + (isFiltering ? '🔍' : '📝') + '</div>' + msg + '</div>';
+    let icon = '📝', msg = '这个月还没有记录<br>点击 ＋ 开始记账';
+    if (isFiltering) {
+      icon = '🔍'; msg = '没有匹配的记录';
+    } else if (!allTxs.length && !hasEverData) {
+      icon = '👋'; msg = '欢迎使用记账本！<br><br>① 点 ＋ 记一笔<br>② 选分类、输金额<br>③ 点保存，搞定！<br><br>💡 设置页可导入支付宝账单';
+    }
+    container.innerHTML = '<div class="empty-state"><div class="icon">' + icon + '</div><div>' + msg + '</div></div>';
     return;
   }
 
@@ -1449,7 +1457,12 @@ async function handleAlipayCSV(e) {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    const text = await file.text();
+    // 自动检测编码：先 UTF-8，失败再 GBK（支付宝默认编码）
+    const buf = await file.arrayBuffer();
+    let text = new TextDecoder('utf-8').decode(buf);
+    if (!text.includes('交易时间')) {
+      text = new TextDecoder('gbk').decode(buf);
+    }
     const lines = text.split('\n');
     let dataStart = 0;
     for (let i = 0; i < lines.length; i++) {
@@ -1518,7 +1531,9 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
 
 // ==================== 初始化 ====================
 (async function init() {
+  document.getElementById('appVersion').textContent = APP_VERSION;
   const all = await dbGetAll();
+  hasEverData = all.length > 0;
   if (!all.length) {
     const restored = await restoreFromOPFS();
     if (restored) console.log('数据已从备份恢复');
