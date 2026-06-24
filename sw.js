@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moneykeeper-v7'; // 改代码后请升级版本号 v8, v9, ... 否则手机不更新
+const CACHE_NAME = 'moneykeeper-v15'; // 改代码后请升级版本号 v16, v17, ... 否则手机不更新
 const ASSETS = [
   './',
   './index.html',
@@ -10,13 +10,19 @@ const ASSETS = [
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
-  self.skipWaiting();
+  self.skipWaiting(); // 自动激活，确保所有旧版本都能更新
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-  ));
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => {
+      return self.clients.matchAll().then(clients => {
+        clients.forEach(c => c.postMessage('newVersion'));
+      });
+    })
+  );
   self.clients.claim();
 });
 

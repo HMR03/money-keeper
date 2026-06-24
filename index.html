@@ -52,6 +52,11 @@ input,select{font:inherit;color:var(--text)}
 .summary-amount{font-size:32px;font-weight:800;letter-spacing:-1px;margin:4px 0 8px;font-family:"DIN Alternate","Avenir Next",system-ui,sans-serif}
 .summary-row{display:flex;gap:20px;font-size:13px;opacity:.85}
 .summary-row span{display:flex;align-items:center;gap:4px}
+.budget-bar{height:3px;background:rgba(255,255,255,.25);border-radius:2px;margin-top:10px;transition:opacity .2s}
+.budget-bar-fill{height:100%;border-radius:2px;background:#fff;transition:width .3s}
+.budget-bar-fill.warn{background:#FFEAA7}
+.budget-bar-fill.over{background:var(--red)}
+.budget-text{font-size:11px;opacity:.8;margin-top:4px;text-align:right}
 .day-header{font-size:13px;color:var(--text2);font-weight:600;padding:8px 4px 6px;display:flex;justify-content:space-between}
 .tx-item{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--card);border-radius:var(--radius-sm);margin-bottom:6px;transition:background .15s}
 .tx-item:active{background:var(--border)}
@@ -83,6 +88,42 @@ input,select{font:inherit;color:var(--text)}
 .filter-hint{font-size:11px;color:var(--text2);text-align:center;padding:4px 0;display:none}
 .filter-hint.show{display:block}
 
+
+/* ==================== 批量操作 ==================== */
+.batch-enter-btn{display:none;padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;background:var(--primary-light);color:var(--primary);margin-left:8px;flex-shrink:0}
+.batch-enter-btn.show{display:inline-block}
+.batch-top-bar{display:none;align-items:center;justify-content:space-between;padding:8px 4px;margin-bottom:6px}
+.batch-top-bar.show{display:flex}
+.batch-top-bar button{font-size:12px;font-weight:600;color:var(--primary);padding:4px 10px;border-radius:6px}
+.batch-top-bar button:active{background:var(--primary-light)}
+.batch-top-bar .exit{color:var(--text2)}
+.tx-item .batch-check{display:none;width:22px;height:22px;border:2px solid var(--text3);border-radius:6px;flex-shrink:0;align-items:center;justify-content:center;font-size:13px;color:#fff;transition:all .15s}
+.batch-mode .tx-item .batch-check{display:flex}
+.tx-item .batch-check.checked{background:var(--primary);border-color:var(--primary)}
+.batch-action-bar{display:none;position:fixed;bottom:calc(56px + var(--safe-b));left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:10px 16px;z-index:99;gap:8px;align-items:center}
+.batch-action-bar.show{display:flex}
+.batch-count{font-size:13px;font-weight:600;color:var(--text);flex-shrink:0}
+.batch-actions{display:flex;gap:6px;margin-left:auto}
+.batch-btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;transition:all .12s}
+.batch-btn:active{transform:scale(.95)}
+.batch-btn.cat{background:var(--primary-light);color:var(--primary)}
+.batch-btn.note{background:#EFF6FF;color:#2563EB}
+.batch-btn.del{background:#FEF2F2;color:var(--red)}
+
+/* 更新提示条（保留样式，不再使用） */
+/* Toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:500;background:var(--text);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;pointer-events:none;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+
+/* 批量操作弹窗 */
+.batch-modal{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:250;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.batch-modal.open{opacity:1;pointer-events:auto}
+.batch-modal .modal-sheet{transform:translateY(100%);transition:transform .3s}
+.batch-modal.open .modal-sheet{transform:translateY(0)}
+.batch-note-modes{display:flex;gap:6px;margin-bottom:12px}
+.batch-note-mode{flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;text-align:center;background:var(--border);color:var(--text2)}
+.batch-note-mode.active{background:var(--primary);color:#fff}
+
 /* ==================== 记一笔 ==================== */
 .add-header{display:flex;align-items:center;padding:12px 16px}
 .add-header .back{font-size:24px;color:var(--text2);padding:4px 8px}
@@ -96,7 +137,9 @@ input,select{font:inherit;color:var(--text)}
 .cat-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:var(--radius-sm);font-size:11px;color:var(--text2);transition:all .15s}
 .cat-btn .emoji{font-size:16px;font-weight:700;width:36px;height:36px;border-radius:8px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center}
 .cat-btn.selected{background:var(--primary-light);color:var(--primary)}
+.cat-btn.selected .emoji{background:var(--primary);color:#fff}
 .cat-btn.selected.income-mode{background:var(--green-light);color:var(--green)}
+.cat-btn.selected.income-mode .emoji{background:var(--green);color:#fff}
 .add-fields{padding:0 16px;margin-bottom:8px}
 .add-field{display:flex;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
 .add-field label{font-size:13px;color:var(--text2);width:50px;flex-shrink:0}
@@ -108,6 +151,7 @@ input,select{font:inherit;color:var(--text)}
 .numpad button:active{background:#E8E8E8}
 .numpad .save-btn{grid-column:span 2;background:var(--primary);color:#fff;padding:14px;font-size:16px}
 .numpad .save-btn:active{background:#E55A2B}
+.numpad .save-btn:disabled{background:var(--border);color:var(--text3);pointer-events:none}
 .numpad .save-btn.income-mode{background:var(--green)}
 .numpad .delete-btn{grid-column:span 1;background:var(--red);color:#fff;padding:14px;font-size:14px}
 .numpad .delete-btn:active{background:#C0392B}
@@ -177,6 +221,9 @@ input,select{font:inherit;color:var(--text)}
 </style>
 </head>
 <body>
+
+<!-- 更新提示 -->
+<div class="toast" id="updateToast">✨ 已更新到最新版本</div>
 <div id="app">
 
   <!-- ==================== 流水页 ==================== -->
@@ -194,6 +241,10 @@ input,select{font:inherit;color:var(--text)}
           <span>收入 <b id="sumIncome">0.00</b></span>
           <span>结余 <b id="sumBalance">0.00</b></span>
         </div>
+        <div class="budget-bar" id="budgetBar" style="display:none">
+          <div class="budget-bar-fill" id="budgetFill"></div>
+          <div class="budget-text" id="budgetText"></div>
+        </div>
       </div>
       <!-- 筛选栏 -->
       <div class="filter-bar">
@@ -204,7 +255,12 @@ input,select{font:inherit;color:var(--text)}
         </div>
         <div class="tag-scroll" id="tagScroll"></div>
       </div>
-      <div class="filter-hint" id="filterHint"></div>
+      <div style="display:flex;align-items:center;justify-content:center"><div class="filter-hint" id="filterHint"></div><button class="batch-enter-btn" id="batchEnterBtn" onclick="enterBatchMode()">批量操作</button></div>
+      <div class="batch-top-bar" id="batchTopBar">
+        <button onclick="toggleSelectAll()">全选</button>
+        <span id="batchInfo" style="font-size:12px;color:var(--text2)">请勾选要操作的记录</span>
+        <button class="exit" onclick="exitBatchMode()">退出</button>
+      </div>
       <div id="txList"></div>
     </div>
   </div>
@@ -262,9 +318,26 @@ input,select{font:inherit;color:var(--text)}
   <div id="page-report" class="page">
     <div class="page-pad">
       <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">报表</h2>
+      <div class="month-nav">
+        <button onclick="changeReportMonth(-1)">‹</button>
+        <span id="reportMonthLabel">2026年6月</span>
+        <button onclick="changeReportMonth(1)">›</button>
+      </div>
       <div class="report-period">
         <button class="active" onclick="setReportPeriod('month',this)">月</button>
         <button onclick="setReportPeriod('year',this)">年</button>
+      </div>
+      <!-- 报表汇总卡片 -->
+      <div class="summary-card" id="reportSummary" style="margin-bottom:12px">
+        <div style="font-size:12px;opacity:.8" id="reportPeriodLabel">2026年</div>
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <span style="font-size:12px;opacity:.7">总支出</span>
+          <span class="summary-amount" id="reportExpense" style="margin:4px 0">0.00</span>
+        </div>
+        <div class="summary-row">
+          <span>总收入 <b id="reportIncome">0.00</b></span>
+          <span>结余 <b id="reportBalance">0.00</b></span>
+        </div>
       </div>
       <div class="card card-shadow">
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">收支趋势</div>
@@ -291,6 +364,12 @@ input,select{font:inherit;color:var(--text)}
         </div>
       </div>
       <div class="setting-group">
+        <div class="setting-group-title">预算</div>
+        <div class="setting-item" onclick="openBudgetEditor()">
+          月度预算<span id="budgetDisplay" style="color:var(--text2);font-size:13px"></span><span class="arrow">›</span>
+        </div>
+      </div>
+      <div class="setting-group">
         <div class="setting-group-title">数据</div>
         <div class="setting-item" onclick="exportData()">
           导出数据<span class="arrow">›</span>
@@ -308,7 +387,7 @@ input,select{font:inherit;color:var(--text)}
         </div>
       </div>
       <div style="text-align:center;padding:20px;color:var(--text3);font-size:11px">
-        记账本 v1.0 · 零广告 · 数据存在本地<br>
+        记账本 <span id="appVersion"></span> · 零广告 · 数据存在本地<br>
         长按主屏幕图标可卸载
       </div>
     </div>
@@ -330,6 +409,72 @@ input,select{font:inherit;color:var(--text)}
     </button>
     <button class="tab-item" style="visibility:hidden;width:0;flex:0"></button>
   </nav>
+</div>
+
+
+<!-- 批量操作底部栏 -->
+<div class="batch-action-bar" id="batchActionBar">
+  <span class="batch-count" id="batchCount">已选 0 条</span>
+  <div class="batch-actions">
+    <button class="batch-btn cat" onclick="openBatchCat()">改分类</button>
+    <button class="batch-btn note" onclick="openBatchNote()">改备注</button>
+    <button class="batch-btn del" onclick="batchDelete()">删除</button>
+  </div>
+</div>
+
+<!-- 批量改分类弹窗 -->
+<div class="batch-modal" id="batchCatModal" onclick="if(event.target===this)closeBatchCat()">
+  <div class="modal-sheet" style="padding:20px 16px calc(16px + var(--safe-b))">
+    <div class="modal-handle"></div>
+    <div class="modal-title">批量修改分类</div>
+    <div style="font-size:12px;color:var(--text2);text-align:center;margin-bottom:12px" id="batchCatInfo"></div>
+    <div class="cat-grid" id="batchCatGrid" style="max-height:240px"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="closeBatchCat()" style="flex:1;height:42px;border-radius:8px;background:var(--border);font-size:14px;font-weight:600">取消</button>
+      <button onclick="doBatchCat()" id="batchCatConfirm" style="flex:1;height:42px;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;font-weight:600">确认修改</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- 预算设置弹窗 -->
+<div class="modal-bg" id="budgetModal" onclick="if(event.target===this)closeBudgetEditor()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">设置月度预算</div>
+    <div style="font-size:12px;color:var(--text2);text-align:center;margin-bottom:8px">金额为 0 或留空 = 不设预算</div>
+    <div style="display:flex;align-items:baseline;justify-content:center;gap:6px;margin-bottom:16px">
+      <span style="font-size:13px;color:var(--text2)">¥</span>
+      <input type="number" id="budgetInput" placeholder="0" style="width:160px;height:44px;border:1.5px solid var(--border);border-radius:8px;text-align:center;font-size:28px;font-weight:800;outline:none;font-family:"DIN Alternate",system-ui" inputmode="numeric">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeBudgetEditor()" style="flex:1;height:42px;border-radius:8px;background:var(--border);font-size:14px;font-weight:600">取消</button>
+      <button onclick="saveBudget()" style="flex:1;height:42px;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;font-weight:600">保存</button>
+    </div>
+  </div>
+</div>
+<!-- 批量改备注弹窗 -->
+<div class="batch-modal" id="batchNoteModal" onclick="if(event.target===this)closeBatchNote()">
+  <div class="modal-sheet" style="padding:20px 16px calc(16px + var(--safe-b))">
+    <div class="modal-handle"></div>
+    <div class="modal-title">批量修改备注</div>
+    <div style="font-size:12px;color:var(--text2);text-align:center;margin-bottom:12px" id="batchNoteInfo"></div>
+    <div class="batch-note-modes">
+      <button class="batch-note-mode active" onclick="setBatchNoteMode('replace',this)">查找替换</button>
+      <button class="batch-note-mode" onclick="setBatchNoteMode('set',this)">统一设为</button>
+    </div>
+    <div id="batchNoteReplace">
+      <input type="text" id="batchNoteFind" placeholder="查找内容" style="width:100%;height:38px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:14px;outline:none;margin-bottom:8px">
+      <input type="text" id="batchNoteRepl" placeholder="替换为" style="width:100%;height:38px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:14px;outline:none">
+    </div>
+    <div id="batchNoteSet" style="display:none">
+      <input type="text" id="batchNoteVal" placeholder="输入新备注" style="width:100%;height:38px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:14px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="closeBatchNote()" style="flex:1;height:42px;border-radius:8px;background:var(--border);font-size:14px;font-weight:600">取消</button>
+      <button onclick="doBatchNote()" style="flex:1;height:42px;border-radius:8px;background:#2563EB;color:#fff;font-size:14px;font-weight:600">确认修改</button>
+    </div>
+  </div>
 </div>
 
 <!-- Category Editor Modal -->
@@ -387,6 +532,8 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
+const APP_VERSION = 'v15'; // 升级时同步修改
+
 // ==================== 状态 ====================
 let currentMonth = new Date();
 let addType = 'expense';
@@ -394,12 +541,18 @@ let addAmount = '0';
 let selectedCat = null;
 let editingTxId = null;
 let reportPeriod = 'month';
+let reportMonth = new Date(); // 报表页独立月份导航
 let catEditorType = 'expense';
 let trendChart = null;
 let pendingImage = null; // 待保存的图片 Blob
 let pendingAlipayRows = null; // CSV 解析后待导入的数据
 let filterQuery = '';
 let filterCat = null; // 当前选中的分类筛选
+let batchMode = false;
+let hasEverData = false; // 是否曾有数据（用于区分首次使用）
+let batchSelected = new Set();
+let batchNewCat = null;
+let batchNoteMode = 'replace';
 
 // ==================== IndexedDB ====================
 function openDB() {
@@ -598,6 +751,9 @@ function numInput(key) {
 
 function updateAmountDisplay() {
   document.getElementById('amountDisplay').textContent = addAmount;
+  // 金额为 0 时禁用保存按钮
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = parseFloat(addAmount) <= 0;
 }
 
 async function saveTx() {
@@ -634,7 +790,8 @@ async function saveTx() {
 
 	async function deleteTx() {
 	  if (!editingTxId) return;
-	  if (!confirm('确定要删除这条记录吗？此操作不可恢复。')) return;
+	  const info = selectedCat ? `「${selectedCat} -${parseFloat(addAmount).toFixed(2)}」` : '';
+  if (!confirm(`确定删除${info}吗？\n此操作不可恢复。`)) return;
 	  await dbDelete(editingTxId);
 	  await deleteImageFromOPFS(editingTxId);
 	  backupToOPFS();
@@ -712,8 +869,10 @@ async function renderTxList() {
   if (isFiltering && allTxs.length > 0) {
     hint.textContent = `筛选结果：${txs.length} 条 / 共 ${allTxs.length} 条`;
     hint.className = 'filter-hint show';
+    document.getElementById('batchEnterBtn').className = 'batch-enter-btn show';
   } else {
     hint.className = 'filter-hint';
+    if (!batchMode) document.getElementById('batchEnterBtn').className = 'batch-enter-btn';
   }
 
   // 汇总（基于筛选后的数据）
@@ -727,10 +886,32 @@ async function renderTxList() {
   document.getElementById('sumIncome').textContent = totalIncome.toFixed(2);
   document.getElementById('sumBalance').textContent = (totalIncome - totalExpense).toFixed(2);
 
+  // 预算进度条
+  const budget = getBudget();
+  const bar = document.getElementById('budgetBar');
+  const fill = document.getElementById('budgetFill');
+  const text = document.getElementById('budgetText');
+  if (budget > 0) {
+    const pct = Math.min(totalExpense / budget * 100, 100);
+    bar.style.display = '';
+    fill.style.width = pct + '%';
+    text.textContent = `已用 ${totalExpense.toFixed(0)} / 预算 ${budget.toFixed(0)}`;
+    fill.className = 'budget-bar-fill';
+    if (totalExpense >= budget) fill.classList.add('over');
+    else if (totalExpense >= budget * 0.8) fill.classList.add('warn');
+  } else {
+    bar.style.display = 'none';
+  }
+
   const container = document.getElementById('txList');
   if (!txs.length) {
-    const msg = isFiltering ? '没有匹配的记录' : '这个月还没有记录<br>点击 ＋ 开始记账';
-    container.innerHTML = '<div class="empty-state"><div class="icon">' + (isFiltering ? '🔍' : '📝') + '</div>' + msg + '</div>';
+    let icon = '📝', msg = '这个月还没有记录<br>点击 ＋ 开始记账';
+    if (isFiltering) {
+      icon = '🔍'; msg = '没有匹配的记录';
+    } else if (!allTxs.length && !hasEverData) {
+      icon = '👋'; msg = '欢迎使用记账本！<br><br>① 点 ＋ 记一笔<br>② 选分类、输金额<br>③ 点保存，搞定！<br><br>💡 设置页可导入支付宝账单';
+    }
+    container.innerHTML = '<div class="empty-state"><div class="icon">' + icon + '</div><div>' + msg + '</div></div>';
     return;
   }
 
@@ -752,7 +933,8 @@ async function renderTxList() {
     </div>`;
     items.forEach(t => {
       const cat = findCat(t.type, t.category);
-	      html += `<div class="tx-item" data-txid="${t.id}" onclick="openAdd('${t.id}')">
+	      html += `<div class="tx-item" data-txid="${t.id}" onclick="${batchMode ? `toggleBatchCheck('${t.id}',event)` : `openAdd('${t.id}')`}">
+        <div class="batch-check ${batchSelected.has(t.id)?'checked':''}" data-batch-id="${t.id}">${batchSelected.has(t.id)?'✓':''}</div>
         <div class="tx-icon ${t.type}">${cat.name[0]}</div>
         <div class="tx-info">
           <div class="tx-cat">${t.category}</div>
@@ -776,6 +958,172 @@ async function renderTxList() {
 	  });
 }
 
+
+// ==================== 批量操作 ====================
+function enterBatchMode() {
+  batchMode = true;
+  batchSelected.clear();
+  document.getElementById('page-tx').querySelector('.page-pad').classList.add('batch-mode');
+  document.getElementById('batchTopBar').className = 'batch-top-bar show';
+  document.getElementById('batchActionBar').className = 'batch-action-bar show';
+  updateBatchUI();
+  renderTxList();
+}
+
+function exitBatchMode() {
+  batchMode = false;
+  batchSelected.clear();
+  document.getElementById('page-tx').querySelector('.page-pad').classList.remove('batch-mode');
+  document.getElementById('batchTopBar').className = 'batch-top-bar';
+  document.getElementById('batchActionBar').className = 'batch-action-bar';
+  renderTxList();
+}
+
+function toggleBatchCheck(id, e) {
+  e.stopPropagation();
+  if (batchSelected.has(id)) batchSelected.delete(id);
+  else batchSelected.add(id);
+  // Update checkbox visual
+  const el = document.querySelector(`[data-batch-id="${id}"]`);
+  if (el) {
+    el.className = batchSelected.has(id) ? 'batch-check checked' : 'batch-check';
+    el.textContent = batchSelected.has(id) ? '✓' : '';
+  }
+  updateBatchUI();
+}
+
+function toggleSelectAll() {
+  const allIds = document.querySelectorAll('[data-batch-id]');
+  const allChecked = batchSelected.size >= allIds.length && allIds.length > 0;
+  if (allChecked) {
+    batchSelected.clear();
+  } else {
+    allIds.forEach(el => batchSelected.add(el.dataset.batchId));
+  }
+  allIds.forEach(el => {
+    const checked = batchSelected.has(el.dataset.batchId);
+    el.className = checked ? 'batch-check checked' : 'batch-check';
+    el.textContent = checked ? '✓' : '';
+  });
+  updateBatchUI();
+}
+
+function updateBatchUI() {
+  const n = batchSelected.size;
+  document.getElementById('batchCount').textContent = `已选 ${n} 条`;
+  document.getElementById('batchInfo').textContent = n > 0 ? `已选 ${n} 条记录` : '请勾选要操作的记录';
+}
+
+// -- 批量改分类 --
+function openBatchCat() {
+  if (!batchSelected.size) { alert('请先勾选记录'); return; }
+  batchNewCat = null;
+  const cats = getCats('expense').concat(getCats('income'));
+  const unique = [...new Map(cats.map(c => [c.name, c])).values()];
+  document.getElementById('batchCatGrid').innerHTML = unique.map(c =>
+    `<button class="cat-btn" onclick="pickBatchCat('${c.name}',this)">
+      <span class="emoji">${c.name[0]}</span>${c.name}
+    </button>`
+  ).join('');
+  document.getElementById('batchCatInfo').textContent = `将 ${batchSelected.size} 条记录的分类改为：`;
+  document.getElementById('batchCatModal').classList.add('open');
+}
+
+function pickBatchCat(name, btn) {
+  batchNewCat = name;
+  document.querySelectorAll('#batchCatGrid .cat-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function closeBatchCat() { document.getElementById('batchCatModal').classList.remove('open'); }
+
+async function doBatchCat() {
+  if (!batchNewCat) { alert('请选择分类'); return; }
+  const all = await dbGetAll();
+  let count = 0;
+  for (const tx of all) {
+    if (batchSelected.has(tx.id)) {
+      tx.category = batchNewCat;
+      await dbAdd(tx);
+      count++;
+    }
+  }
+  closeBatchCat();
+  backupToOPFS();
+  alert(`已修改 ${count} 条记录的分类为「${batchNewCat}」`);
+  exitBatchMode();
+}
+
+// -- 批量改备注 --
+function openBatchNote() {
+  if (!batchSelected.size) { alert('请先勾选记录'); return; }
+  document.getElementById('batchNoteFind').value = '';
+  document.getElementById('batchNoteRepl').value = '';
+  document.getElementById('batchNoteVal').value = '';
+  batchNoteMode = 'replace';
+  document.querySelectorAll('.batch-note-mode').forEach((b,i) => b.classList.toggle('active', i===0));
+  document.getElementById('batchNoteReplace').style.display = '';
+  document.getElementById('batchNoteSet').style.display = 'none';
+  document.getElementById('batchNoteInfo').textContent = `将修改 ${batchSelected.size} 条记录的备注`;
+  document.getElementById('batchNoteModal').classList.add('open');
+}
+
+function setBatchNoteMode(mode, btn) {
+  batchNoteMode = mode;
+  document.querySelectorAll('.batch-note-mode').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('batchNoteReplace').style.display = mode === 'replace' ? '' : 'none';
+  document.getElementById('batchNoteSet').style.display = mode === 'set' ? '' : 'none';
+}
+
+function closeBatchNote() { document.getElementById('batchNoteModal').classList.remove('open'); }
+
+async function doBatchNote() {
+  const all = await dbGetAll();
+  let count = 0;
+  if (batchNoteMode === 'replace') {
+    const find = document.getElementById('batchNoteFind').value;
+    const repl = document.getElementById('batchNoteRepl').value;
+    if (!find) { alert('请输入查找内容'); return; }
+    for (const tx of all) {
+      if (batchSelected.has(tx.id) && (tx.note || '').includes(find)) {
+        tx.note = tx.note.split(find).join(repl);
+        await dbAdd(tx);
+        count++;
+      }
+    }
+    closeBatchNote();
+    backupToOPFS();
+    alert(`已替换 ${count} 条记录的备注`);
+  } else {
+    const val = document.getElementById('batchNoteVal').value;
+    for (const tx of all) {
+      if (batchSelected.has(tx.id)) {
+        tx.note = val;
+        await dbAdd(tx);
+        count++;
+      }
+    }
+    closeBatchNote();
+    backupToOPFS();
+    alert(`已修改 ${count} 条记录的备注为「${val}」`);
+  }
+  exitBatchMode();
+}
+
+// -- 批量删除 --
+async function batchDelete() {
+  if (!batchSelected.size) { alert('请先勾选记录'); return; }
+  if (!confirm(`确定删除选中的 ${batchSelected.size} 条记录吗？\n💡 建议先到「设置 → 导出数据」备份\n此操作不可恢复。`)) return;
+  for (const id of batchSelected) {
+    await dbDelete(id);
+    await deleteImageFromOPFS(id);
+  }
+  backupToOPFS();
+  alert(`已删除 ${batchSelected.size} 条记录`);
+  exitBatchMode();
+}
+
 // ==================== 报表 ====================
 function setReportPeriod(p, btn) {
   reportPeriod = p;
@@ -784,16 +1132,39 @@ function setReportPeriod(p, btn) {
   renderReport();
 }
 
+
+function changeReportMonth(delta) {
+  reportMonth.setMonth(reportMonth.getMonth() + delta);
+  document.getElementById('reportMonthLabel').textContent = `${reportMonth.getFullYear()}年${reportMonth.getMonth() + 1}月`;
+  renderReport();
+}
 async function renderReport() {
   const all = await dbGetAll();
-  const now = new Date();
+  const y = reportMonth.getFullYear();
+  const m = reportMonth.getMonth();
 
+  // 计算汇总
+  let filtered;
   if (reportPeriod === 'month') {
-    renderTrendChart(all, now);
-    renderRankList(all, now.getFullYear(), now.getMonth());
+    const ym = `${y}-${String(m+1).padStart(2,'0')}`;
+    filtered = all.filter(t => t.yearMonth === ym);
+    document.getElementById('reportPeriodLabel').textContent = `${y}年${m+1}月`;
   } else {
-    renderTrendChart(all, now);
-    renderRankList(all, now.getFullYear(), -1);
+    filtered = all.filter(t => t.date && t.date.startsWith(String(y)));
+    document.getElementById('reportPeriodLabel').textContent = `${y}年`;
+  }
+
+  const totalExp = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const totalInc = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  document.getElementById('reportExpense').textContent = totalExp.toFixed(2);
+  document.getElementById('reportIncome').textContent = totalInc.toFixed(2);
+  document.getElementById('reportBalance').textContent = (totalInc - totalExp).toFixed(2);
+
+  renderTrendChart(all, reportMonth);
+  if (reportPeriod === 'month') {
+    renderRankList(all, y, m);
+  } else {
+    renderRankList(all, y, -1);
   }
 }
 
@@ -1147,7 +1518,12 @@ async function handleAlipayCSV(e) {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    const text = await file.text();
+    // 自动检测编码：先 UTF-8，失败再 GBK（支付宝默认编码）
+    const buf = await file.arrayBuffer();
+    let text = new TextDecoder('utf-8').decode(buf);
+    if (!text.includes('交易时间')) {
+      text = new TextDecoder('gbk').decode(buf);
+    }
     const lines = text.split('\n');
     let dataStart = 0;
     for (let i = 0; i < lines.length; i++) {
@@ -1212,11 +1588,46 @@ async function doImportAlipay() {
 function closeCsvModal() {
   document.getElementById('csvModal').classList.remove('open');
 }
+
+// ==================== 预算管理 ====================
+function getBudget() {
+  const v = localStorage.getItem('mk_budget');
+  return v ? parseFloat(v) : 0;
+}
+
+function saveBudget() {
+  const val = parseFloat(document.getElementById('budgetInput').value);
+  const budget = val > 0 ? val : 0;
+  localStorage.setItem('mk_budget', budget);
+  closeBudgetEditor();
+  document.getElementById('budgetDisplay').textContent = budget > 0 ? `¥${budget.toFixed(0)}` : '未设置';
+  renderTxList();
+}
+
+function openBudgetEditor() {
+  document.getElementById('budgetInput').value = getBudget() || '';
+  document.getElementById('budgetModal').classList.add('open');
+}
+
+function closeBudgetEditor() {
+  document.getElementById('budgetModal').classList.remove('open');
+}
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ==================== 初始化 ====================
 (async function init() {
+  // 更新后弹出提示
+  if (sessionStorage.getItem('swUpdated')) {
+    sessionStorage.removeItem('swUpdated');
+    const toast = document.getElementById('updateToast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  }
+  document.getElementById('appVersion').textContent = APP_VERSION;
+  const b = getBudget();
+  document.getElementById('budgetDisplay').textContent = b > 0 ? `¥${b.toFixed(0)}` : '未设置';
   const all = await dbGetAll();
+  hasEverData = all.length > 0;
   if (!all.length) {
     const restored = await restoreFromOPFS();
     if (restored) console.log('数据已从备份恢复');
@@ -1224,8 +1635,18 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
   renderTxList();
 })();
 
-// PWA 注册
+// PWA 注册 + 自动更新
 if ('serviceWorker' in navigator) {
+  const doReload = () => {
+    sessionStorage.setItem('swUpdated', '1');
+    window.location.reload();
+  };
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data === 'newVersion') doReload();
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    doReload();
+  });
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 </script>
