@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moneykeeper-v14'; // 改代码后请升级版本号 v15, v16, ... 否则手机不更新
+const CACHE_NAME = 'moneykeeper-v15'; // 改代码后请升级版本号 v16, v17, ... 否则手机不更新
 const ASSETS = [
   './',
   './index.html',
@@ -18,7 +18,6 @@ self.addEventListener('activate', e => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     ).then(() => {
-      // 通知所有打开的页面
       return self.clients.matchAll().then(clients => {
         clients.forEach(c => c.postMessage('newVersion'));
       });

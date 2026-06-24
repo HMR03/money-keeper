@@ -52,6 +52,11 @@ input,select{font:inherit;color:var(--text)}
 .summary-amount{font-size:32px;font-weight:800;letter-spacing:-1px;margin:4px 0 8px;font-family:"DIN Alternate","Avenir Next",system-ui,sans-serif}
 .summary-row{display:flex;gap:20px;font-size:13px;opacity:.85}
 .summary-row span{display:flex;align-items:center;gap:4px}
+.budget-bar{height:3px;background:rgba(255,255,255,.25);border-radius:2px;margin-top:10px;transition:opacity .2s}
+.budget-bar-fill{height:100%;border-radius:2px;background:#fff;transition:width .3s}
+.budget-bar-fill.warn{background:#FFEAA7}
+.budget-bar-fill.over{background:var(--red)}
+.budget-text{font-size:11px;opacity:.8;margin-top:4px;text-align:right}
 .day-header{font-size:13px;color:var(--text2);font-weight:600;padding:8px 4px 6px;display:flex;justify-content:space-between}
 .tx-item{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--card);border-radius:var(--radius-sm);margin-bottom:6px;transition:background .15s}
 .tx-item:active{background:var(--border)}
@@ -217,12 +222,8 @@ input,select{font:inherit;color:var(--text)}
 </head>
 <body>
 
-<!-- 更新提示条 -->
+<!-- 更新提示 -->
 <div class="toast" id="updateToast">✨ 已更新到最新版本</div>
-<div class="update-banner" id="updateBanner">
-  <span style="font-size:13px">✨ 发现新版本</span>
-  <button class="upd-btn" onclick="doUpdate()">更新</button>
-</div>
 <div id="app">
 
   <!-- ==================== 流水页 ==================== -->
@@ -239,6 +240,10 @@ input,select{font:inherit;color:var(--text)}
         <div class="summary-row">
           <span>收入 <b id="sumIncome">0.00</b></span>
           <span>结余 <b id="sumBalance">0.00</b></span>
+        </div>
+        <div class="budget-bar" id="budgetBar" style="display:none">
+          <div class="budget-bar-fill" id="budgetFill"></div>
+          <div class="budget-text" id="budgetText"></div>
         </div>
       </div>
       <!-- 筛选栏 -->
@@ -359,6 +364,12 @@ input,select{font:inherit;color:var(--text)}
         </div>
       </div>
       <div class="setting-group">
+        <div class="setting-group-title">预算</div>
+        <div class="setting-item" onclick="openBudgetEditor()">
+          月度预算<span id="budgetDisplay" style="color:var(--text2);font-size:13px"></span><span class="arrow">›</span>
+        </div>
+      </div>
+      <div class="setting-group">
         <div class="setting-group-title">数据</div>
         <div class="setting-item" onclick="exportData()">
           导出数据<span class="arrow">›</span>
@@ -425,6 +436,23 @@ input,select{font:inherit;color:var(--text)}
   </div>
 </div>
 
+
+<!-- 预算设置弹窗 -->
+<div class="modal-bg" id="budgetModal" onclick="if(event.target===this)closeBudgetEditor()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">设置月度预算</div>
+    <div style="font-size:12px;color:var(--text2);text-align:center;margin-bottom:8px">金额为 0 或留空 = 不设预算</div>
+    <div style="display:flex;align-items:baseline;justify-content:center;gap:6px;margin-bottom:16px">
+      <span style="font-size:13px;color:var(--text2)">¥</span>
+      <input type="number" id="budgetInput" placeholder="0" style="width:160px;height:44px;border:1.5px solid var(--border);border-radius:8px;text-align:center;font-size:28px;font-weight:800;outline:none;font-family:"DIN Alternate",system-ui" inputmode="numeric">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeBudgetEditor()" style="flex:1;height:42px;border-radius:8px;background:var(--border);font-size:14px;font-weight:600">取消</button>
+      <button onclick="saveBudget()" style="flex:1;height:42px;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;font-weight:600">保存</button>
+    </div>
+  </div>
+</div>
 <!-- 批量改备注弹窗 -->
 <div class="batch-modal" id="batchNoteModal" onclick="if(event.target===this)closeBatchNote()">
   <div class="modal-sheet" style="padding:20px 16px calc(16px + var(--safe-b))">
@@ -504,7 +532,7 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
-const APP_VERSION = 'v14'; // 升级时同步修改
+const APP_VERSION = 'v15'; // 升级时同步修改
 
 // ==================== 状态 ====================
 let currentMonth = new Date();
@@ -857,6 +885,23 @@ async function renderTxList() {
   document.getElementById('sumExpense').textContent = totalExpense.toFixed(2);
   document.getElementById('sumIncome').textContent = totalIncome.toFixed(2);
   document.getElementById('sumBalance').textContent = (totalIncome - totalExpense).toFixed(2);
+
+  // 预算进度条
+  const budget = getBudget();
+  const bar = document.getElementById('budgetBar');
+  const fill = document.getElementById('budgetFill');
+  const text = document.getElementById('budgetText');
+  if (budget > 0) {
+    const pct = Math.min(totalExpense / budget * 100, 100);
+    bar.style.display = '';
+    fill.style.width = pct + '%';
+    text.textContent = `已用 ${totalExpense.toFixed(0)} / 预算 ${budget.toFixed(0)}`;
+    fill.className = 'budget-bar-fill';
+    if (totalExpense >= budget) fill.classList.add('over');
+    else if (totalExpense >= budget * 0.8) fill.classList.add('warn');
+  } else {
+    bar.style.display = 'none';
+  }
 
   const container = document.getElementById('txList');
   if (!txs.length) {
@@ -1543,6 +1588,30 @@ async function doImportAlipay() {
 function closeCsvModal() {
   document.getElementById('csvModal').classList.remove('open');
 }
+
+// ==================== 预算管理 ====================
+function getBudget() {
+  const v = localStorage.getItem('mk_budget');
+  return v ? parseFloat(v) : 0;
+}
+
+function saveBudget() {
+  const val = parseFloat(document.getElementById('budgetInput').value);
+  const budget = val > 0 ? val : 0;
+  localStorage.setItem('mk_budget', budget);
+  closeBudgetEditor();
+  document.getElementById('budgetDisplay').textContent = budget > 0 ? `¥${budget.toFixed(0)}` : '未设置';
+  renderTxList();
+}
+
+function openBudgetEditor() {
+  document.getElementById('budgetInput').value = getBudget() || '';
+  document.getElementById('budgetModal').classList.add('open');
+}
+
+function closeBudgetEditor() {
+  document.getElementById('budgetModal').classList.remove('open');
+}
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ==================== 初始化 ====================
@@ -1555,6 +1624,8 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
     setTimeout(() => toast.classList.remove('show'), 2000);
   }
   document.getElementById('appVersion').textContent = APP_VERSION;
+  const b = getBudget();
+  document.getElementById('budgetDisplay').textContent = b > 0 ? `¥${b.toFixed(0)}` : '未设置';
   const all = await dbGetAll();
   hasEverData = all.length > 0;
   if (!all.length) {
