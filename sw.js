@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moneykeeper-v11'; // 改代码后请升级版本号 v12, v13, ... 否则手机不更新
+const CACHE_NAME = 'moneykeeper-v12'; // 改代码后请升级版本号 v13, v14, ... 否则手机不更新
 const ASSETS = [
   './',
   './index.html',
@@ -10,7 +10,7 @@ const ASSETS = [
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
-  // 不自动 skipWaiting，等用户点「更新」按钮
+  self.skipWaiting(); // v11 过渡版本：自动激活，让更新提示条代码生效
 });
 
 self.addEventListener('activate', e => {
