@@ -105,6 +105,12 @@ input,select{font:inherit;color:var(--text)}
 .batch-btn.note{background:#EFF6FF;color:#2563EB}
 .batch-btn.del{background:#FEF2F2;color:var(--red)}
 
+/* 更新提示条 */
+.update-banner{position:fixed;top:0;left:0;right:0;z-index:400;background:var(--primary);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;transform:translateY(-100%);transition:transform .3s}
+.update-banner.show{transform:translateY(0)}
+.update-banner .upd-btn{color:#fff;border:1.5px solid rgba(255,255,255,.6);padding:5px 14px;border-radius:6px;font-size:12px;font-weight:600;flex-shrink:0;margin-left:12px}
+.update-banner .upd-btn:active{background:rgba(255,255,255,.2)}
+
 /* 批量操作弹窗 */
 .batch-modal{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:250;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
 .batch-modal.open{opacity:1;pointer-events:auto}
@@ -210,6 +216,12 @@ input,select{font:inherit;color:var(--text)}
 </style>
 </head>
 <body>
+
+<!-- 更新提示条 -->
+<div class="update-banner" id="updateBanner">
+  <span style="font-size:13px">✨ 发现新版本</span>
+  <button class="upd-btn" onclick="doUpdate()">更新</button>
+</div>
 <div id="app">
 
   <!-- ==================== 流水页 ==================== -->
@@ -1514,9 +1526,36 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
   renderTxList();
 })();
 
-// PWA 注册
+// PWA 注册 + 更新提示
+let _swReg = null;
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    _swReg = reg;
+    // 监听：新 SW 已就绪，等待激活
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          document.getElementById('updateBanner').classList.add('show');
+        }
+      });
+    });
+    // 检查是否已有等待中的 SW
+    if (reg.waiting && navigator.serviceWorker.controller) {
+      document.getElementById('updateBanner').classList.add('show');
+    }
+  }).catch(() => {});
+
+  // 新 SW 激活后自动刷新
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
+  });
+}
+
+function doUpdate() {
+  if (_swReg && _swReg.waiting) {
+    _swReg.waiting.postMessage('skipWaiting');
+  }
 }
 </script>
 </body>
