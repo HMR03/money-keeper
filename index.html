@@ -385,21 +385,21 @@ input,select{font:inherit;color:var(--text)}
         <div class="setting-group-title">数据</div>
         <div class="setting-item" onclick="exportData()">
           导出数据<span class="arrow">›</span>
+        </div>
         <div class="setting-item" onclick="exportCSV()">
           导出 CSV<span class="arrow">›</span>
-        </div>
-      <div class="setting-group">
-        <div class="setting-group-title">外观</div>
-        <div class="setting-item" onclick="toggleDark()">
-          深色模式<span id="darkLabel" style="color:var(--text2);font-size:13px"></span><span class="arrow">›</span>
-        </div>
-      </div>
         </div>
         <div class="setting-item" onclick="importData()">
           导入数据<span class="arrow">›</span>
         </div>
         <div class="setting-item" onclick="importAlipayCSV()">
           导入支付宝 CSV<span class="arrow">›</span>
+        </div>
+      </div>
+      <div class="setting-group">
+        <div class="setting-group-title">外观</div>
+        <div class="setting-item" onclick="toggleDark()">
+          深色模式<span id="darkLabel" style="color:var(--text2);font-size:13px"></span><span class="arrow">›</span>
         </div>
       </div>
       <div class="setting-group">
@@ -554,7 +554,7 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
-const APP_VERSION = 'v18'; // 升级时同步修改
+const APP_VERSION = 'v19'; // 升级时同步修改
 
 // ==================== 状态 ====================
 let currentMonth = new Date();
@@ -575,9 +575,12 @@ let hasEverData = false; // 是否曾有数据（用于区分首次使用）
 let batchSelected = new Set();
 let batchNewCat = null;
 let batchNoteMode = 'replace';
+let imageIdCache = null; // 缓存有图片的交易ID集合，避免逐条查OPFS
 
 // ==================== IndexedDB ====================
+let _dbCache = null;
 function openDB() {
+  if (_dbCache) return Promise.resolve(_dbCache);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open('MoneyKeeper', 1);
     req.onupgradeneeded = e => {
@@ -587,7 +590,7 @@ function openDB() {
         store.createIndex('yearMonth', 'yearMonth');
       }
     };
-    req.onsuccess = e => resolve(e.target.result);
+    req.onsuccess = e => { _dbCache = e.target.result; resolve(_dbCache); };
     req.onerror = e => reject(e.target.error);
   });
 }
@@ -597,6 +600,19 @@ async function dbAdd(tx) {
   return new Promise((resolve, reject) => {
     const t = db.transaction('transactions', 'readwrite');
     t.objectStore('transactions').put(tx);
+    t.oncomplete = () => resolve();
+    t.onerror = e => reject(e.target.error);
+  });
+}
+
+// 批量写入：一个事务内完成，性能远好于逐条 dbAdd
+async function dbAddBatch(txs) {
+  if (!txs.length) return;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('transactions', 'readwrite');
+    const store = t.objectStore('transactions');
+    txs.forEach(tx => store.put(tx));
     t.oncomplete = () => resolve();
     t.onerror = e => reject(e.target.error);
   });
@@ -674,8 +690,10 @@ function openAdd(txId) {
   document.getElementById('inputDate').value = new Date().toISOString().split('T')[0];
   setType('expense');
 	  pendingImage = null;
+	  const _thumb = document.getElementById('imgThumb');
+	  if (_thumb.src) URL.revokeObjectURL(_thumb.src);
+	  _thumb.src = '';
 	  document.getElementById('imgPreview').style.display = 'none';
-	  document.getElementById('imgThumb').src = '';
 
   if (txId) {
     // Edit mode: load existing transaction
@@ -742,8 +760,8 @@ function renderCatGrid() {
     const grid = document.getElementById('catGrid');
     grid.innerHTML = cats.map(c =>
       `<button class="cat-btn ${selectedCat===c.name?(addType==='income'?'selected income-mode':'selected'):''}"
-        onclick="selectCat('${c.name}')">
-        <span class="emoji">${c.name[0]}</span>${c.name}
+        onclick="selectCat('${escAttr(c.name)}')">
+        <span class="emoji">${esc(c.name[0])}</span>${esc(c.name)}
       </button>`
     ).join('');
   });
@@ -892,7 +910,7 @@ async function renderTxList() {
   const tagScroll = document.getElementById('tagScroll');
   if (usedCats.length > 0) {
     tagScroll.innerHTML = usedCats.map(cat =>
-      `<button class="tag-pill ${filterCat===cat?'active':''}" onclick="toggleCatFilter('${cat}')">${cat}</button>`
+      `<button class="tag-pill ${filterCat===cat?'active':''}" onclick="toggleCatFilter('${escAttr(cat)}')">${esc(cat)}</button>`
     ).join('');
   } else {
     tagScroll.innerHTML = '';
@@ -980,9 +998,9 @@ async function renderTxList() {
       const cat = findCat(t.type, t.category);
 	      html += `<div class="tx-item" data-txid="${t.id}" onclick="${batchMode ? `toggleBatchCheck('${t.id}',event)` : `openAdd('${t.id}')`}">
         <div class="batch-check ${batchSelected.has(t.id)?'checked':''}" data-batch-id="${t.id}">${batchSelected.has(t.id)?'✓':''}</div>
-        <div class="tx-icon ${t.type}">${cat.name[0]}</div>
+        <div class="tx-icon ${t.type}">${esc(cat.name[0])}</div>
         <div class="tx-info">
-          <div class="tx-cat">${t.category}</div>
+          <div class="tx-cat">${esc(t.category)}</div>
           ${t.note ? `<div class="tx-note">${esc(t.note)}</div>` : ''}
         </div>
         <div class="tx-amount ${t.type}">${t.type==='expense'?'-':'+'} ${t.amount.toFixed(2)}</div>
@@ -992,15 +1010,15 @@ async function renderTxList() {
   }
   container.innerHTML = html;
 
-	  // 异步检查哪些记录有图片
-	  txs.forEach(async (t) => {
-	    try {
-	      const root = await navigator.storage.getDirectory();
-	      const fh = await root.getFileHandle(`img_${t.id}.jpg`);
-	      const badge = document.getElementById(`imgBadge_${t.id}`);
-	      if (badge) badge.style.display = '';
-	    } catch(e) { /* no image */ }
-	  });
+	  // 用内存缓存标记有图片的记录（无需逐条查 OPFS）
+	  if (imageIdCache) {
+	    txs.forEach(t => {
+	      if (imageIdCache.has(t.id)) {
+	        const badge = document.getElementById(`imgBadge_${t.id}`);
+	        if (badge) badge.style.display = '';
+	      }
+	    });
+	  }
 }
 
 
@@ -1066,8 +1084,8 @@ function openBatchCat() {
   const cats = getCats('expense').concat(getCats('income'));
   const unique = [...new Map(cats.map(c => [c.name, c])).values()];
   document.getElementById('batchCatGrid').innerHTML = unique.map(c =>
-    `<button class="cat-btn" onclick="pickBatchCat('${c.name}',this)">
-      <span class="emoji">${c.name[0]}</span>${c.name}
+    `<button class="cat-btn" onclick="pickBatchCat('${escAttr(c.name)}',this)">
+      <span class="emoji">${esc(c.name[0])}</span>${esc(c.name)}
     </button>`
   ).join('');
   document.getElementById('batchCatInfo').textContent = `将 ${batchSelected.size} 条记录的分类改为：`;
@@ -1085,17 +1103,17 @@ function closeBatchCat() { document.getElementById('batchCatModal').classList.re
 async function doBatchCat() {
   if (!batchNewCat) { alert('请选择分类'); return; }
   const all = await dbGetAll();
-  let count = 0;
+  const modified = [];
   for (const tx of all) {
     if (batchSelected.has(tx.id)) {
       tx.category = batchNewCat;
-      await dbAdd(tx);
-      count++;
+      modified.push(tx);
     }
   }
+  await dbAddBatch(modified);
   closeBatchCat();
   backupToOPFS();
-  alert(`已修改 ${count} 条记录的分类为「${batchNewCat}」`);
+  alert(`已修改 ${modified.length} 条记录的分类为「${batchNewCat}」`);
   exitBatchMode();
 }
 
@@ -1125,7 +1143,7 @@ function closeBatchNote() { document.getElementById('batchNoteModal').classList.
 
 async function doBatchNote() {
   const all = await dbGetAll();
-  let count = 0;
+  const modified = [];
   if (batchNoteMode === 'replace') {
     const find = document.getElementById('batchNoteFind').value;
     const repl = document.getElementById('batchNoteRepl').value;
@@ -1133,25 +1151,25 @@ async function doBatchNote() {
     for (const tx of all) {
       if (batchSelected.has(tx.id) && (tx.note || '').includes(find)) {
         tx.note = tx.note.split(find).join(repl);
-        await dbAdd(tx);
-        count++;
+        modified.push(tx);
       }
     }
+    await dbAddBatch(modified);
     closeBatchNote();
     backupToOPFS();
-    alert(`已替换 ${count} 条记录的备注`);
+    alert(`已替换 ${modified.length} 条记录的备注`);
   } else {
     const val = document.getElementById('batchNoteVal').value;
     for (const tx of all) {
       if (batchSelected.has(tx.id)) {
         tx.note = val;
-        await dbAdd(tx);
-        count++;
+        modified.push(tx);
       }
     }
+    await dbAddBatch(modified);
     closeBatchNote();
     backupToOPFS();
-    alert(`已修改 ${count} 条记录的备注为「${val}」`);
+    alert(`已修改 ${modified.length} 条记录的备注为「${val}」`);
   }
   exitBatchMode();
 }
@@ -1378,7 +1396,7 @@ async function handleImport(e) {
     const data = JSON.parse(text);
     if (!data.transactions) throw new Error('无效的数据文件');
     await dbClear();
-    for (const tx of data.transactions) await dbAdd(tx);
+    await dbAddBatch(data.transactions);
     if (data.expenseCategories) saveCats('expense', data.expenseCategories);
     if (data.incomeCategories) saveCats('income', data.incomeCategories);
     if (data.budget != null) localStorage.setItem('mk_budget', data.budget);
@@ -1396,6 +1414,16 @@ async function clearAllData() {
   await dbClear();
   localStorage.removeItem('mk_cats_expense');
   localStorage.removeItem('mk_cats_income');
+  localStorage.removeItem('mk_budget');
+  // 清除 OPFS 备份和所有图片
+  try {
+    const root = await navigator.storage.getDirectory();
+    for await (const [name] of root.entries()) {
+      await root.removeEntry(name);
+    }
+  } catch(e) { /* OPFS not available */ }
+  imageIdCache = new Set();
+  document.getElementById('budgetDisplay').textContent = '未设置';
   alert('已清除全部数据');
   renderTxList();
 }
@@ -1429,7 +1457,7 @@ async function restoreFromOPFS() {
     const text = await f.text();
     const data = JSON.parse(text);
     if (!data.transactions || !data.transactions.length) return false;
-    for (const tx of data.transactions) await dbAdd(tx);
+    await dbAddBatch(data.transactions);
     if (data.expenseCategories) saveCats('expense', data.expenseCategories);
     if (data.incomeCategories) saveCats('income', data.incomeCategories);
     if (data.budget != null) localStorage.setItem('mk_budget', data.budget);
@@ -1440,6 +1468,17 @@ async function restoreFromOPFS() {
 // ==================== 工具 ====================
 
 // ==================== 图片功能 ====================
+async function buildImageCache() {
+  imageIdCache = new Set();
+  try {
+    const root = await navigator.storage.getDirectory();
+    for await (const [name] of root.entries()) {
+      const m = name.match(/^img_(.+)\.jpg$/);
+      if (m) imageIdCache.add(m[1]);
+    }
+  } catch(e) { /* OPFS not available */ }
+}
+
 async function saveImageToOPFS(txId, blob) {
   try {
     const root = await navigator.storage.getDirectory();
@@ -1447,6 +1486,7 @@ async function saveImageToOPFS(txId, blob) {
     const w = await fh.createWritable();
     await w.write(blob);
     await w.close();
+    if (imageIdCache) imageIdCache.add(txId);
   } catch(e) { /* OPFS not available */ }
 }
 
@@ -1461,6 +1501,7 @@ async function deleteImageFromOPFS(txId) {
   try {
     const root = await navigator.storage.getDirectory();
     await root.removeEntry(`img_${txId}.jpg`);
+    if (imageIdCache) imageIdCache.delete(txId);
   } catch(e) { /* file may not exist */ }
 }
 
@@ -1491,15 +1532,18 @@ async function handleImagePicked(e) {
   if (!file) return;
   const blob = await compressImage(file);
   pendingImage = blob;
-  const url = URL.createObjectURL(blob);
-  document.getElementById('imgThumb').src = url;
+  const thumb = document.getElementById('imgThumb');
+  if (thumb.src) URL.revokeObjectURL(thumb.src);
+  thumb.src = URL.createObjectURL(blob);
   document.getElementById('imgPreview').style.display = 'flex';
   e.target.value = '';
 }
 
 function removeImage() {
   pendingImage = editingTxId ? 'REMOVED' : null;
-  document.getElementById('imgThumb').src = '';
+  const thumb = document.getElementById('imgThumb');
+  if (thumb.src) URL.revokeObjectURL(thumb.src);
+  thumb.src = '';
   document.getElementById('imgPreview').style.display = 'none';
 }
 
@@ -1512,8 +1556,10 @@ async function viewImage(txId) {
 }
 
 function closeImageViewer() {
+  const img = document.getElementById('imgViewerImg');
+  if (img.src) URL.revokeObjectURL(img.src);
+  img.src = '';
   document.getElementById('imgViewer').classList.remove('open');
-  document.getElementById('imgViewerImg').src = '';
 }
 
 // ==================== 支付宝CSV导入 ====================
@@ -1626,9 +1672,7 @@ async function doImportAlipay() {
   const rows = pendingAlipayRows;
   pendingAlipayRows = null;
   closeCsvModal();
-  for (const tx of rows) {
-    await dbAdd(tx);
-  }
+  await dbAddBatch(rows);
   backupToOPFS();
   alert(`成功导入 ${rows.length} 条记录`);
   renderTxList();
@@ -1679,12 +1723,16 @@ function toggleDark() {
 // 导出 CSV
 async function exportCSV() {
   const all = await dbGetAll();
+  function csvField(s) {
+    s = String(s);
+    if (/[,"\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
   const rows = ['交易时间,类型,分类,金额,备注'];
   all.sort((a, b) => b.date.localeCompare(a.date)).forEach(t => {
-    rows.push(`${t.date},${t.type==='expense'?'支出':'收入'},${t.category},${t.amount.toFixed(2)},${(t.note||'').replace(/,/g,'，')}`);
+    rows.push([t.date, t.type==='expense'?'支出':'收入', t.category, t.amount.toFixed(2), t.note||''].map(csvField).join(','));
   });
-  const blob = new Blob(['﻿' + rows.join('
-')], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['\ufeff' + rows.join('\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `流水数据_${new Date().toISOString().split('T')[0]}.csv`;
@@ -1726,6 +1774,7 @@ function getSortedCats(type) {
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ==================== 初始化 ====================
 (async function init() {
@@ -1751,6 +1800,7 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
     const restored = await restoreFromOPFS();
     if (restored) console.log('数据已从备份恢复');
   }
+  await buildImageCache();
   renderTxList();
   initScrollCollapse();
 })();
