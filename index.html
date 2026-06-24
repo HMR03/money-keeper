@@ -71,6 +71,9 @@ input,select{font:inherit;color:var(--text)}
 .tx-amount.income{color:var(--green)}
 .empty-state{text-align:center;padding:60px 20px;color:var(--text3);font-size:14px;line-height:1.8}
 .empty-state .icon{font-size:48px;margin-bottom:8px;opacity:.5}
+.today-btn{position:fixed;right:16px;bottom:calc(80px + var(--safe-b));width:40px;height:40px;border-radius:50%;background:var(--card);box-shadow:0 2px 8px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;font-size:18px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
+.today-btn.show{opacity:1;pointer-events:auto}
+.today-btn:active{transform:scale(.92)}
 
 
 /* ==================== 筛选栏 ==================== */
@@ -263,6 +266,7 @@ input,select{font:inherit;color:var(--text)}
       </div>
       <div id="txList"></div>
     </div>
+    <button class="today-btn" id="todayBtn" onclick="goToToday()">📍</button>
   </div>
 
   <!-- ==================== 记一笔 ==================== -->
@@ -532,7 +536,7 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
-const APP_VERSION = 'v15'; // 升级时同步修改
+const APP_VERSION = 'v16'; // 升级时同步修改
 
 // ==================== 状态 ====================
 let currentMonth = new Date();
@@ -785,7 +789,9 @@ async function saveTx() {
 	  pendingImage = null;
   await dbAdd(tx);
   backupToOPFS(); // 静默备份，不阻塞
-  closePage();
+  showToast('✅ 已记一笔');
+  if (navigator.vibrate) navigator.vibrate(15);
+  setTimeout(() => closePage(), 300);
 }
 
 	async function deleteTx() {
@@ -825,6 +831,15 @@ function toggleCatFilter(cat) {
   renderTxList();
 }
 
+function goToToday() {
+  currentMonth = new Date();
+  filterQuery = '';
+  filterCat = null;
+  document.getElementById('filterInput').value = '';
+  document.getElementById('filterClear').style.display = 'none';
+  renderTxList();
+}
+
 function changeMonth(delta) {
   currentMonth.setMonth(currentMonth.getMonth() + delta);
   filterQuery = '';
@@ -834,7 +849,14 @@ function changeMonth(delta) {
   renderTxList();
 }
 
+function updateTodayBtn() {
+  const now = new Date();
+  const isCurrent = currentMonth.getFullYear() === now.getFullYear() && currentMonth.getMonth() === now.getMonth();
+  document.getElementById('todayBtn').className = 'today-btn' + (isCurrent ? '' : ' show');
+}
+
 async function renderTxList() {
+  updateTodayBtn();
   const y = currentMonth.getFullYear();
   const m = currentMonth.getMonth();
   document.getElementById('monthLabel').textContent = `${y}年${m + 1}月`;
@@ -1611,6 +1633,13 @@ function openBudgetEditor() {
 
 function closeBudgetEditor() {
   document.getElementById('budgetModal').classList.remove('open');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('updateToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1500);
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
