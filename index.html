@@ -228,9 +228,33 @@ input,select{font:inherit;color:var(--text)}
 .cat-add-row input{flex:1;height:38px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:14px;outline:none}
 .cat-add-row input:focus{border-color:var(--primary)}
 .cat-add-row button{height:38px;padding:0 16px;background:var(--primary);color:#fff;border-radius:8px;font-size:13px;font-weight:600}
+/* Changelog Modal */
+.changelog-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:260;display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .2s}
+.changelog-modal.open{opacity:1;pointer-events:auto}
+.changelog-card{background:var(--card);border-radius:var(--radius);width:100%;max-width:360px;max-height:70vh;padding:24px 20px 16px;transform:scale(.9);transition:transform .25s;display:flex;flex-direction:column}
+.changelog-modal.open .changelog-card{transform:scale(1)}
+.changelog-ver{display:inline-block;background:var(--primary);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-bottom:8px}
+.changelog-title{font-size:18px;font-weight:800;margin-bottom:4px}
+.changelog-date{font-size:11px;color:var(--text3);margin-bottom:14px}
+.changelog-list{list-style:none;flex:1;overflow-y:auto;margin-bottom:16px}
+.changelog-list li{position:relative;padding:6px 0 6px 18px;font-size:13px;color:var(--text);line-height:1.5}
+.changelog-list li::before{content:'';position:absolute;left:0;top:13px;width:6px;height:6px;border-radius:50%;background:var(--primary)}
+.changelog-ok{width:100%;height:42px;border-radius:10px;background:var(--primary);color:#fff;font-size:15px;font-weight:700;flex-shrink:0}
+.changelog-ok:active{background:#E55A2B}
 </style>
 </head>
 <body>
+
+<!-- 更新公告弹窗 -->
+<div class="changelog-modal" id="changelogModal" onclick="if(event.target===this)closeChangelog()">
+  <div class="changelog-card">
+    <span class="changelog-ver" id="clVer"></span>
+    <div class="changelog-title" id="clTitle"></div>
+    <div class="changelog-date" id="clDate"></div>
+    <ul class="changelog-list" id="clList"></ul>
+    <button class="changelog-ok" onclick="closeChangelog()">知道了</button>
+  </div>
+</div>
 
 <!-- 更新提示 -->
 <div class="toast" id="updateToast">✨ 已更新到最新版本</div>
@@ -403,6 +427,12 @@ input,select{font:inherit;color:var(--text)}
         </div>
       </div>
       <div class="setting-group">
+        <div class="setting-group-title">关于</div>
+        <div class="setting-item" onclick="showFullChangelog()">
+          更新日志<span class="arrow">›</span>
+        </div>
+      </div>
+      <div class="setting-group">
         <div class="setting-item danger" onclick="clearAllData()">
           清除全部数据
         </div>
@@ -554,7 +584,31 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
-const APP_VERSION = 'v19'; // 升级时同步修改
+const APP_VERSION = 'v20'; // 升级时同步修改
+
+// ==================== 更新日志 ====================
+// 每次发版往最前面加一条，title 简短，items 列要点
+const CHANGELOG = [
+  {
+    version: 'v19',
+    date: '2026-06-25',
+    title: '稳定性修复',
+    items: [
+      '修复设置页布局显示异常',
+      '修复 CSV 导出偶发格式错误',
+      '大幅提升批量操作和导入速度',
+      '修复长时间使用可能的内存泄漏',
+      '「清除全部数据」现在会彻底清除备份和图片',
+    ]
+  },
+  // 以后每次发版照这个格式往前面加：
+  // {
+  //   version: 'v20',
+  //   date: '2026-07-01',
+  //   title: '新功能标题',
+  //   items: ['功能1', '功能2', '修复xxx']
+  // },
+];
 
 // ==================== 状态 ====================
 let currentMonth = new Date();
@@ -1713,6 +1767,58 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 1500);
 }
 
+// ==================== 更新公告 ====================
+// 从版本号提取数字：'v19' → 19
+function verNum(v) { return parseInt(String(v).replace(/\D/g, ''), 10) || 0; }
+
+// 自动弹出：显示用户没看过的所有版本
+function showUnseenChangelog() {
+  const seenVer = localStorage.getItem('mk_changelog_seen');
+  const seenNum = verNum(seenVer);
+  // 筛选出比上次看过的版本更新的条目
+  const unseen = CHANGELOG.filter(c => verNum(c.version) > seenNum);
+  if (!unseen.length) return;
+  if (unseen.length === 1) {
+    // 只跳了一个版本，显示单条
+    const entry = unseen[0];
+    document.getElementById('clVer').textContent = entry.version;
+    document.getElementById('clTitle').textContent = entry.title;
+    document.getElementById('clDate').textContent = entry.date;
+    document.getElementById('clList').innerHTML = entry.items
+      .map(item => `<li>${esc(item)}</li>`).join('');
+  } else {
+    // 跨了多个版本，全部列出（新版在前）
+    unseen.sort((a, b) => verNum(b.version) - verNum(a.version));
+    document.getElementById('clVer').textContent = unseen[0].version;
+    document.getElementById('clTitle').textContent = '近期更新';
+    document.getElementById('clDate').textContent = `${unseen[unseen.length-1].version} → ${unseen[0].version}`;
+    document.getElementById('clList').innerHTML = unseen.map(c =>
+      `<li style="font-weight:700;padding-top:10px;color:var(--primary)">${esc(c.version)} · ${esc(c.title)}<span style="font-weight:400;color:var(--text3);margin-left:6px">${c.date}</span></li>` +
+      c.items.map(item => `<li>${esc(item)}</li>`).join('')
+    ).join('');
+  }
+  document.getElementById('changelogModal').classList.add('open');
+}
+
+function closeChangelog() {
+  document.getElementById('changelogModal').classList.remove('open');
+  localStorage.setItem('mk_changelog_seen', APP_VERSION);
+}
+
+// 设置页入口：查看完整更新日志（所有版本）
+function showFullChangelog() {
+  if (!CHANGELOG.length) return;
+  const allItems = CHANGELOG.map(c =>
+    `<li style="font-weight:700;padding-top:10px;color:var(--primary)">${esc(c.version)} · ${esc(c.title)}<span style="font-weight:400;color:var(--text3);margin-left:6px">${c.date}</span></li>` +
+    c.items.map(item => `<li>${esc(item)}</li>`).join('')
+  ).join('');
+  document.getElementById('clVer').textContent = '更新日志';
+  document.getElementById('clTitle').textContent = '';
+  document.getElementById('clDate').textContent = '';
+  document.getElementById('clList').innerHTML = allItems;
+  document.getElementById('changelogModal').classList.add('open');
+}
+
 function toggleDark() {
   const on = document.body.classList.toggle('dark');
   localStorage.setItem('mk_dark', on ? '1' : '');
@@ -1778,13 +1884,6 @@ function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/'/g,'&#39;
 
 // ==================== 初始化 ====================
 (async function init() {
-  // 更新后弹出提示
-  if (sessionStorage.getItem('swUpdated')) {
-    sessionStorage.removeItem('swUpdated');
-    const toast = document.getElementById('updateToast');
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
-  }
   document.getElementById('appVersion').textContent = APP_VERSION;
   if (localStorage.getItem('mk_dark')) { document.body.classList.add('dark'); document.getElementById('darkLabel').textContent = '✓'; }
   const b = getBudget();
@@ -1803,6 +1902,12 @@ function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/'/g,'&#39;
   await buildImageCache();
   renderTxList();
   initScrollCollapse();
+
+  // 更新公告：版本变化 + 非首次用户 → 自动弹出所有没看过的版本
+  const seenVer = localStorage.getItem('mk_changelog_seen');
+  if (seenVer !== APP_VERSION && hasEverData && CHANGELOG.length) {
+    setTimeout(() => showUnseenChangelog(), 600);
+  }
 })();
 
 // PWA 注册 + 自动更新
