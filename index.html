@@ -21,6 +21,13 @@
   --radius:14px;--radius-sm:10px;
   --safe-b:env(safe-area-inset-bottom,0px);
 }
+.dark{
+  --primary-light:#3D1B0D;
+  --green-light:#0D2E1A;
+  --bg:#1A1A1E;--card:#252528;
+  --text:#E5E5E7;--text2:#8E8E93;--text3:#48484C;
+  --border:#2C2C2E;
+}
 html,body{height:100%;overflow:hidden;font-family:-apple-system,"PingFang SC","Microsoft YaHei UI",sans-serif;background:var(--bg);color:var(--text)}
 button{font:inherit;border:none;background:none;cursor:pointer;color:inherit}
 input,select{font:inherit;color:var(--text)}
@@ -237,7 +244,7 @@ input,select{font:inherit;color:var(--text)}
         <span id="monthLabel">2026年6月</span>
         <button onclick="changeMonth(1)">›</button>
       </div>
-      <div class="summary-card">
+      <div class="summary-card" id="summaryCard" style="transition:all .3s">
         <div style="font-size:12px;opacity:.8">本月支出</div>
         <div class="summary-amount" id="sumExpense">0.00</div>
         <div class="summary-row">
@@ -255,6 +262,7 @@ input,select{font:inherit;color:var(--text)}
           <span class="s-icon">🔍</span>
           <input type="text" id="filterInput" placeholder="搜索备注或分类..." oninput="onFilterInput()">
           <span class="s-clear" id="filterClear" onclick="clearFilter()">✕</span>
+          <span id="searchAllLabel" onclick="toggleSearchAll()" style="position:absolute;right:30px;top:50%;transform:translateY(-50%);font-size:10px;cursor:pointer;color:var(--text3);padding:2px 6px;border-radius:10px;border:1px solid var(--border);background:var(--card)">本月</span>
         </div>
         <div class="tag-scroll" id="tagScroll"></div>
       </div>
@@ -377,6 +385,15 @@ input,select{font:inherit;color:var(--text)}
         <div class="setting-group-title">数据</div>
         <div class="setting-item" onclick="exportData()">
           导出数据<span class="arrow">›</span>
+        <div class="setting-item" onclick="exportCSV()">
+          导出 CSV<span class="arrow">›</span>
+        </div>
+      <div class="setting-group">
+        <div class="setting-group-title">外观</div>
+        <div class="setting-item" onclick="toggleDark()">
+          深色模式<span id="darkLabel" style="color:var(--text2);font-size:13px"></span><span class="arrow">›</span>
+        </div>
+      </div>
         </div>
         <div class="setting-item" onclick="importData()">
           导入数据<span class="arrow">›</span>
@@ -392,6 +409,7 @@ input,select{font:inherit;color:var(--text)}
       </div>
       <div style="text-align:center;padding:20px;color:var(--text3);font-size:11px">
         记账本 <span id="appVersion"></span> · 零广告 · 数据存在本地<br>
+        <span id="dataStats"></span><br>
         长按主屏幕图标可卸载
       </div>
     </div>
@@ -536,7 +554,7 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
-const APP_VERSION = 'v17'; // 升级时同步修改
+const APP_VERSION = 'v18'; // 升级时同步修改
 
 // ==================== 状态 ====================
 let currentMonth = new Date();
@@ -720,14 +738,15 @@ function setType(type) {
 }
 
 function renderCatGrid() {
-  const cats = getCats(addType);
-  const grid = document.getElementById('catGrid');
-  grid.innerHTML = cats.map(c =>
-    `<button class="cat-btn ${selectedCat===c.name?(addType==='income'?'selected income-mode':'selected'):''}"
-      onclick="selectCat('${c.name}')">
-      <span class="emoji">${c.name[0]}</span>${c.name}
-    </button>`
-  ).join('');
+  getSortedCats(addType).then(cats => {
+    const grid = document.getElementById('catGrid');
+    grid.innerHTML = cats.map(c =>
+      `<button class="cat-btn ${selectedCat===c.name?(addType==='income'?'selected income-mode':'selected'):''}"
+        onclick="selectCat('${c.name}')">
+        <span class="emoji">${c.name[0]}</span>${c.name}
+      </button>`
+    ).join('');
+  });
 }
 
 function selectCat(name) {
@@ -835,6 +854,8 @@ function goToToday() {
   currentMonth = new Date();
   filterQuery = '';
   filterCat = null;
+  searchAll = false;
+  document.getElementById('searchAllLabel').textContent = '本月';
   document.getElementById('filterInput').value = '';
   document.getElementById('filterClear').style.display = 'none';
   renderTxList();
@@ -844,6 +865,8 @@ function changeMonth(delta) {
   currentMonth.setMonth(currentMonth.getMonth() + delta);
   filterQuery = '';
   filterCat = null;
+  searchAll = false;
+  document.getElementById('searchAllLabel').textContent = '本月';
   document.getElementById('filterInput').value = '';
   document.getElementById('filterClear').style.display = 'none';
   renderTxList();
@@ -861,7 +884,7 @@ async function renderTxList() {
   const m = currentMonth.getMonth();
   document.getElementById('monthLabel').textContent = `${y}年${m + 1}月`;
 
-  const allTxs = await dbGetByMonth(y, m);
+  const allTxs = (searchAll && filterQuery) ? await dbGetAll() : await dbGetByMonth(y, m);
   allTxs.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 
   // 渲染分类标签栏（基于本月所有数据，不受筛选影响）
@@ -1329,7 +1352,8 @@ async function exportData() {
     exportDate: new Date().toISOString(),
     transactions: all,
     expenseCategories: getCats('expense'),
-    incomeCategories: getCats('income')
+    incomeCategories: getCats('income'),
+    budget: getBudget()
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1357,6 +1381,7 @@ async function handleImport(e) {
     for (const tx of data.transactions) await dbAdd(tx);
     if (data.expenseCategories) saveCats('expense', data.expenseCategories);
     if (data.incomeCategories) saveCats('income', data.incomeCategories);
+    if (data.budget != null) localStorage.setItem('mk_budget', data.budget);
     alert(`导入成功！共 ${data.transactions.length} 条记录`);
     renderTxList();
   } catch (err) {
@@ -1407,6 +1432,7 @@ async function restoreFromOPFS() {
     for (const tx of data.transactions) await dbAdd(tx);
     if (data.expenseCategories) saveCats('expense', data.expenseCategories);
     if (data.incomeCategories) saveCats('income', data.incomeCategories);
+    if (data.budget != null) localStorage.setItem('mk_budget', data.budget);
     return true;
   } catch(e) { return false; }
 }
@@ -1642,6 +1668,63 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 1500);
 }
+
+function toggleDark() {
+  const on = document.body.classList.toggle('dark');
+  localStorage.setItem('mk_dark', on ? '1' : '');
+  document.getElementById('darkLabel').textContent = on ? '✓' : '';
+}
+
+// ==================== 工具扩展 ====================
+// 导出 CSV
+async function exportCSV() {
+  const all = await dbGetAll();
+  const rows = ['交易时间,类型,分类,金额,备注'];
+  all.sort((a, b) => b.date.localeCompare(a.date)).forEach(t => {
+    rows.push(`${t.date},${t.type==='expense'?'支出':'收入'},${t.category},${t.amount.toFixed(2)},${(t.note||'').replace(/,/g,'，')}`);
+  });
+  const blob = new Blob(['﻿' + rows.join('
+')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `流水数据_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+}
+
+// 跨月搜索
+let searchAll = false;
+function toggleSearchAll() {
+  searchAll = !searchAll;
+  document.getElementById('searchAllLabel').textContent = searchAll ? '全部月份' : '本月';
+  renderTxList();
+}
+
+// 汇总卡片滑动隐藏
+function initScrollCollapse() {
+  const page = document.getElementById('page-tx');
+  let lastScroll = 0;
+  page.addEventListener('scroll', () => {
+    const st = page.scrollTop;
+    const card = document.getElementById('summaryCard');
+    if (st > 80 && st > lastScroll) { card.style.opacity = '0.3'; card.style.transform = 'scale(0.95)'; }
+    else if (st < 40) { card.style.opacity = '1'; card.style.transform = ''; }
+    lastScroll = st;
+  }, {passive: true});
+}
+
+// 常用分类排序
+function getSortedCats(type) {
+  const cats = getCats(type);
+  // 统计本月使用次数
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  return dbGetByMonth(now.getFullYear(), now.getMonth()).then(txs => {
+    const freq = {};
+    txs.filter(t => t.type === type).forEach(t => { freq[t.category] = (freq[t.category]||0) + 1; });
+    return cats.sort((a, b) => (freq[b.name]||0) - (freq[a.name]||0));
+  });
+}
+
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ==================== 初始化 ====================
@@ -1654,15 +1737,22 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
     setTimeout(() => toast.classList.remove('show'), 2000);
   }
   document.getElementById('appVersion').textContent = APP_VERSION;
+  if (localStorage.getItem('mk_dark')) { document.body.classList.add('dark'); document.getElementById('darkLabel').textContent = '✓'; }
   const b = getBudget();
   document.getElementById('budgetDisplay').textContent = b > 0 ? `¥${b.toFixed(0)}` : '未设置';
   const all = await dbGetAll();
   hasEverData = all.length > 0;
+  // 存储统计
+  try {
+    const { usage } = await navigator.storage.estimate();
+    document.getElementById('dataStats').textContent = `共 ${all.length} 条记录 · 已用 ${(usage/1024/1024).toFixed(1)} MB`;
+  } catch(e) {}
   if (!all.length) {
     const restored = await restoreFromOPFS();
     if (restored) console.log('数据已从备份恢复');
   }
   renderTxList();
+  initScrollCollapse();
 })();
 
 // PWA 注册 + 自动更新
