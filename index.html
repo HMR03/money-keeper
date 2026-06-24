@@ -536,7 +536,7 @@ const DEFAULT_INCOME_CATS = [
   {name:'理财'},{name:'红包'},{name:'其他'}
 ];
 
-const APP_VERSION = 'v16'; // 升级时同步修改
+const APP_VERSION = 'v17'; // 升级时同步修改
 
 // ==================== 状态 ====================
 let currentMonth = new Date();
@@ -1164,6 +1164,7 @@ async function renderReport() {
   const all = await dbGetAll();
   const y = reportMonth.getFullYear();
   const m = reportMonth.getMonth();
+  document.getElementById('reportMonthLabel').textContent = `${y}年${m + 1}月`;
 
   // 计算汇总
   let filtered;
